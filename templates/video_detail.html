@@ -269,26 +269,35 @@
       <div class="d-flex align-items-center justify-content-between gap-2">
         <div>
           <strong>Compare with other video</strong>
-          <div class="small-note">Provide a video link/ID and a comparison date (YYYY-MM-DD). The app will compute offset days automatically.</div>
+          <div class="small-note">Enter a tracked video link/ID and a custom column name. Each entry adds a new dynamic comparison column using exact matching timestamps.</div>
         </div>
-        <div class="d-flex gap-2 align-items-center">
-          <form method="POST" class="d-flex gap-2 align-items-center" action="{{ url_for('set_comparison', video_id=v.video_id) }}">
+        <div class="d-flex gap-2 align-items-center flex-wrap">
+          <form method="POST" class="d-flex gap-2 align-items-center flex-wrap" action="{{ url_for('set_comparison', video_id=v.video_id) }}">
             <input name="comparison_link" class="form-control form-control-sm" placeholder="Compare video (link or id)" style="min-width:220px;">
-            <input name="comparison_date" type="date" class="form-control form-control-sm" placeholder="YYYY-MM-DD" style="width:150px;">
-            <button class="btn btn-sm btn-primary" type="submit">Set</button>
+            <input name="comparison_name" class="form-control form-control-sm" placeholder="Column name (e.g. Pathaan)" style="min-width:220px;">
+            <button class="btn btn-sm btn-primary" type="submit">Add comparison</button>
           </form>
 
           <form method="POST" action="{{ url_for('set_comparison', video_id=v.video_id) }}">
             <input type="hidden" name="comparison_link" value="">
-            <input type="hidden" name="comparison_date" value="">
-            <button class="btn btn-sm btn-outline-secondary" type="submit">Reset</button>
+            <input type="hidden" name="comparison_name" value="">
+            <button class="btn btn-sm btn-outline-secondary" type="submit">Clear all</button>
           </form>
         </div>
       </div>
 
-      {% if v.compare_meta %}
+      {% if v.comparison_configs %}
         <div class="mt-2 small-note">
-          Comparing to <strong>{{ v.compare_meta.video_id }}</strong> with offset <strong>{{ v.compare_meta.offset_days }}</strong> days.
+          {% for c in v.comparison_configs %}
+            <div class="d-flex align-items-center gap-2 mb-1">
+              <span><strong>{{ c.column_name }}</strong> → {{ c.compare_video_id }}</span>
+              {% if c.id is number %}
+              <form method="POST" action="{{ url_for('remove_comparison', video_id=v.video_id, comparison_id=c.id) }}" class="m-0">
+                <button class="btn btn-sm btn-outline-danger" type="submit">Remove</button>
+              </form>
+              {% endif %}
+            </div>
+          {% endfor %}
         </div>
       {% endif %}
     </div>
