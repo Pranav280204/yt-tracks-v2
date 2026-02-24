@@ -63,6 +63,10 @@
 
     <div class="col-12 col-lg-6">
       <h5>Hourly (IST) — {{ selected_date }}</h5>
+{% if compare_video_id %}
+      <div class="small muted mb-2">Comparison: <span class="mono">{{ compare_video_id }}</span>{% if comparison_date %} on {{ comparison_date }}{% endif %}</div>
+      {% endif %}
+
       <div class="d-flex gap-2 mb-2 align-items-center">
         <form method="get" action="{{ url_for('video_stats', video_id=video_id) }}" class="d-flex gap-2">
           <select name="date" class="form-select form-select-sm" style="min-width:170px;">
@@ -79,7 +83,7 @@
         <div class="table-responsive">
           <table class="table table-sm">
             <thead>
-              <tr><th>Hour (IST)</th><th>End views</th><th>Hourly gain</th></tr>
+              <tr><th>Hour (IST)</th><th>End views</th><th>Hourly gain</th><th>Comparison hourly gain</th><th>Drop vs comparison</th></tr>
             </thead>
             <tbody>
               {% for h in hourly %}
@@ -95,6 +99,30 @@
                         <span class="gain-pos">{{ "{:,}".format(g) }}</span>
                       {% else %}
                         <span class="gain-neg">{{ "{:,}".format(g) }}</span>
+                      {% endif %}
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if h.comparison_hour_gain is none %}
+                      <span class="muted">—</span>
+                    {% else %}
+                      {% set cg = h.comparison_hour_gain %}
+                      {% if cg >= 0 %}
+                        <span class="gain-pos">{{ "{:,}".format(cg) }}</span>
+                      {% else %}
+                        <span class="gain-neg">{{ "{:,}".format(cg) }}</span>
+                      {% endif %}
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if h.hourly_drop_pct is none %}
+                      <span class="muted">—</span>
+                    {% else %}
+                      {% set dp = h.hourly_drop_pct %}
+                      {% if dp <= 0 %}
+                        <span class="gain-pos">{{ "{:.2f}".format(dp) }}%</span>
+                      {% else %}
+                        <span class="gain-neg">{{ "{:.2f}".format(dp) }}%</span>
                       {% endif %}
                     {% endif %}
                   </td>

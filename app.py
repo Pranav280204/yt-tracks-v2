@@ -2037,9 +2037,48 @@ def video_stats(video_id):
     else:
         sel_date = latest_ist_date
 
-    # fetch daily list (EST) and hourly for selected IST date
+    # fetch configured comparison video (if any)
+    compare_video_id = None
+    compare_offset_days = None
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT compare_video_id, compare_offset_days FROM video_list WHERE video_id=%s",
+            (video_id,)
+        )
+        comp_cfg = cur.fetchone()
+        if comp_cfg:
+            compare_video_id = comp_cfg.get("compare_video_id")
+            try:
+                if comp_cfg.get("compare_offset_days") is not None:
+                    compare_offset_days = int(comp_cfg.get("compare_offset_days"))
+            except Exception:
+                compare_offset_days = None
+
+    # fetch daily list and hourly for selected IST date
     daily = fetch_daily_gains(video_id)   # keep all days
     hourly = fetch_hourly_for_ist_date(video_id, sel_date)
+
+    # fetch hourly stats for the comparison video aligned by configured date offset
+    comparison_date = None
+    comparison_hourly = []
+    if compare_video_id and compare_offset_days is not None:
+        comparison_date = sel_date - timedelta(days=compare_offset_days)
+        comparison_hourly = fetch_hourly_for_ist_date(compare_video_id, comparison_date)
+
+    comparison_gain_by_hour = {r["hour"]: r.get("hour_gain") for r in comparison_hourly}
+
+    # add hourly percentage drop against comparison video's hourly gain
+    for row in hourly:
+        main_gain = row.get("hour_gain")
+        comp_gain = comparison_gain_by_hour.get(row.get("hour"))
+        row["comparison_hour_gain"] = comp_gain
+        row["hourly_drop_pct"] = None
+        if main_gain is None or comp_gain is None or comp_gain == 0:
+            continue
+        try:
+            row["hourly_drop_pct"] = round(((comp_gain - main_gain) / abs(comp_gain)) * 100.0, 2)
+        except Exception:
+            row["hourly_drop_pct"] = None
 
     # build list of dates (IST) available for selector from DB quickly:
     with conn.cursor() as cur:
@@ -2057,7 +2096,9 @@ def video_stats(video_id):
         daily=daily,
         hourly=hourly,
         selected_date=sel_date.isoformat(),
-        ist_dates=ist_dates
+        ist_dates=ist_dates,
+        compare_video_id=compare_video_id,
+        comparison_date=comparison_date.isoformat() if comparison_date else None
     )
 
 @app.get("/logout")
