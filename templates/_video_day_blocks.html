@@ -14,7 +14,7 @@
                 <th>24h Gain ⓘ</th>
                 <th>Daily View Gain</th>
                 <th>24h Midpoint Time</th>
-                <th>Compare diff</th>
+                {% for c in (v.comparison_configs or []) %}<th>{{ c.column_name }} (%)</th>{% endfor %}
                 <th>Likes Δ</th>
                 <th>Prediction</th>
                 <th>Engagement (%)</th>
@@ -31,9 +31,10 @@
                 {% set gain24 = row[5] if row|length > 5 else None %}
                 {% set daily_gain = row[6] if row|length > 6 else None %}
                 {% set midpoint_24h = row[7] if row|length > 7 else None %}
-                {% set comp_diff = row[8] if row|length > 8 else None %}
-                {% set likes = row[10] if row|length > 10 else None %}
-                {% set engagement = row[12] if row|length > 12 else None %}
+                {% set five_min_ratio = row[8] if row|length > 8 else None %}
+                {% set likes = row[9] if row|length > 9 else None %}
+                {% set engagement = row[11] if row|length > 11 else None %}
+                {% set comparison_drops = row[12] if row|length > 12 else {} %}
                 <tr>
                   <td class="mono">{{ ts }}</td>
 
@@ -70,11 +71,14 @@
                     {% else %}{{ midpoint_24h }}{% endif %}
                   </td>
 
+                  {% for c in (v.comparison_configs or []) %}
                   <td>
-                    {% if comp_diff is none %}<span class="gain-null">—</span>
-                    {% elif comp_diff >= 0 %}<span class="gain-pos">+{{ "{:,}".format(comp_diff) }}</span>
-                    {% else %}<span class="gain-neg">{{ "{:,}".format(comp_diff) }}</span>{% endif %}
+                    {% set dp = (comparison_drops or {}).get((c.id|string)) %}
+                    {% if dp is none %}<span class="gain-null">—</span>
+                    {% elif dp <= 0 %}<span class="gain-pos">{{ "{:.2f}".format(dp) }}%</span>
+                    {% else %}<span class="gain-neg">{{ "{:.2f}".format(dp) }}%</span>{% endif %}
                   </td>
+                  {% endfor %}
 
                   <td class="mono">
                     {% if likes is none %}<span class="gain-null">—</span>

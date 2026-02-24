@@ -909,6 +909,29 @@ def find_closest_prev(prev_map: dict, time_part: str, max_earlier_seconds: int =
                 best_delta = delta
     return best
 
+def find_nearest_ts_match(ts_epochs: list[int], ts_rows: dict[int, tuple], target_ts_ist: str, tolerance_seconds: int = 5):
+    """Return nearest row by full IST timestamp within ±tolerance_seconds."""
+    if not ts_epochs:
+        return None
+    try:
+        target_epoch = int(datetime.fromisoformat(target_ts_ist).replace(tzinfo=IST).timestamp())
+    except Exception:
+        return None
+
+    i = bisect.bisect_left(ts_epochs, target_epoch)
+    candidates = []
+    if i < len(ts_epochs):
+        candidates.append(ts_epochs[i])
+    if i > 0:
+        candidates.append(ts_epochs[i - 1])
+    if not candidates:
+        return None
+
+    best_epoch = min(candidates, key=lambda e: abs(e - target_epoch))
+    if abs(best_epoch - target_epoch) <= tolerance_seconds:
+        return ts_rows.get(best_epoch)
+    return None
+
 def process_gains(rows_asc: list[dict]):
     """
     rows_asc: chronological list of dicts with keys ts_utc (aware datetime), views (int),
@@ -1469,14 +1492,6 @@ def build_video_display(vid: str):
         if not vrow:
             return None
 
-        compare_video_id = vrow.get("compare_video_id")
-        compare_offset_days = vrow.get("compare_offset_days")
-        try:
-            if compare_offset_days is not None:
-                compare_offset_days = int(compare_offset_days)
-        except Exception:
-            compare_offset_days = None
-
         # compute earliest timestamp to fetch (+2 days margin for interpolation)
         start_utc = (nowu - timedelta(days=_MAX_DISPLAY_DAYS + 2))
 
@@ -1487,14 +1502,48 @@ def build_video_display(vid: str):
         )
         all_rows = cur.fetchall()
 
-        # fetch comparison rows if configured (same window)
-        comp_rows = None
-        if compare_video_id:
+        # fetch all configured comparisons for this video
+        cur.execute(
+            "SELECT id, compare_video_id, compare_offset_days, column_name FROM comparison_configs WHERE video_id=%s ORDER BY id ASC",
+            (vid,)
+        )
+        comparison_configs = cur.fetchall() or []
+
+        # legacy fallback if no rows in comparison_configs
+        if not comparison_configs and vrow.get("compare_video_id"):
+            comparison_configs = [{
+                "id": "legacy",
+                "compare_video_id": vrow.get("compare_video_id"),
+                "compare_offset_days": 0,
+                "column_name": "Default comparison"
+            }]
+
+        # fetch comparison rows for each configured comparison video
+        comparison_processed_maps = {}
+        for comp in comparison_configs:
+            comp_vid = comp.get("compare_video_id")
+            if not comp_vid:
+                continue
             cur.execute(
                 "SELECT ts_utc, views, likes, comments FROM views WHERE video_id=%s AND ts_utc >= %s ORDER BY ts_utc ASC",
-                (compare_video_id, start_utc)
+                (comp_vid, start_utc)
             )
-            comp_rows = cur.fetchall()
+            comp_rows = cur.fetchall() or []
+            if comp_rows:
+                comp_processed = process_gains(comp_rows)
+                exact_map = {row[0]: row for row in comp_processed}
+                epoch_rows = {}
+                for row in comp_processed:
+                    try:
+                        ep = int(datetime.fromisoformat(row[0]).replace(tzinfo=IST).timestamp())
+                        epoch_rows[ep] = row
+                    except Exception:
+                        continue
+                comparison_processed_maps[str(comp.get("id"))] = {
+                    "exact": exact_map,
+                    "epochs": sorted(epoch_rows.keys()),
+                    "epoch_rows": epoch_rows,
+                }
 
         # fetch reference video rows (for 5-min ratio)
         ref_rows = None
@@ -1521,21 +1570,10 @@ def build_video_display(vid: str):
 
         # build grouped maps for main video
         grouped = {}
-        date_time_map = {}
         for tpl in processed_all:
             ts_ist = tpl[0]  # "YYYY-MM-DD HH:MM:SS"
-            date_str, time_part = ts_ist.split(" ")
+            date_str = ts_ist.split(" ")[0]
             grouped.setdefault(date_str, []).append(tpl)
-            date_time_map.setdefault(date_str, {})[time_part] = tpl
-
-        # process comp rows into date/time map if available
-        comp_date_map = {}
-        if comp_rows:
-            comp_processed = process_gains(comp_rows)
-            for ctpl in comp_processed:
-                c_ts = ctpl[0]
-                c_date, c_time = c_ts.split(" ")
-                comp_date_map.setdefault(c_date, {})[c_time] = ctpl
 
         # processed ref rows into date/time map if available
         ref_time_map = {}
@@ -1550,9 +1588,6 @@ def build_video_display(vid: str):
         dates_sorted = sorted(grouped.keys(), reverse=True)
         for date_str in dates_sorted:
             processed = grouped[date_str]
-            prev_day = (datetime.fromisoformat(date_str).date() - timedelta(days=1)).isoformat()
-            prev_map = date_time_map.get(prev_day, {})
-
             display_rows = []
 
             # track previous likes for same-date chronological samples so we can compute likes gain
@@ -1564,20 +1599,28 @@ def build_video_display(vid: str):
                 (ts_ist, views, gain_5m, hourly_views_gain, hourly_likes_gain, gain_24h,
                  daily_views_gain, gain_24h_midpoint_ist, likes_val, comments_val) = tpl
                 time_part = ts_ist.split(" ")[1]
-
-                # --- comparison diff (if configured) ---
-                comp_diff = None
-                if compare_video_id and compare_offset_days is not None and comp_date_map:
-                    main_date = datetime.fromisoformat(date_str).date()
-                    comp_date = (main_date - timedelta(days=compare_offset_days)).isoformat()
-                    comp_time_map = comp_date_map.get(comp_date, {})
-                    comp_match = find_closest_prev(comp_time_map, time_part, max_earlier_seconds=300)
+                # --- strict same-timestamp comparison drops for each configured comparison ---
+                comparison_drops = {}
+                for comp in comparison_configs:
+                    comp_key = str(comp.get("id"))
+                    comp_data = comparison_processed_maps.get(comp_key, {})
+                    comp_match = comp_data.get("exact", {}).get(ts_ist)
+                    if comp_match is None:
+                        comp_match = find_nearest_ts_match(
+                            comp_data.get("epochs", []),
+                            comp_data.get("epoch_rows", {}),
+                            ts_ist,
+                            tolerance_seconds=5,
+                        )
+                    drop_pct = None
                     if comp_match:
-                        comp_views = comp_match[1]
-                        try:
-                            comp_diff = views - comp_views
-                        except Exception:
-                            comp_diff = None
+                        comp_hourly_gain = comp_match[3] if len(comp_match) > 3 else None
+                        if hourly_views_gain is not None and comp_hourly_gain not in (None, 0):
+                            try:
+                                drop_pct = round(((comp_hourly_gain - hourly_views_gain) / abs(comp_hourly_gain)) * 100.0, 2)
+                            except Exception:
+                                drop_pct = None
+                    comparison_drops[comp_key] = drop_pct
 
                 # --- 5-min ratio against REF_COMPARE_VIDEO_ID ---
                 five_min_ratio = None
@@ -1619,12 +1662,12 @@ def build_video_display(vid: str):
                     engagement_rate = None
 
                 # (ts_ist, views, gain_5m, hourly_views_gain, hourly_likes_gain, gain_24h,
-                #  daily_views_gain, gain_24h_midpoint_ist, comp_diff, five_min_ratio,
-                #  likes_gain, comments_val, engagement_rate)
+                #  daily_views_gain, gain_24h_midpoint_ist, five_min_ratio,
+                #  likes_gain, comments_val, engagement_rate, comparison_drops)
                 display_rows.append((
                     ts_ist, views, gain_5m, hourly_views_gain, hourly_likes_gain, gain_24h,
-                    daily_views_gain, gain_24h_midpoint_ist, comp_diff, five_min_ratio,
-                    likes_gain, comments_val, engagement_rate
+                    daily_views_gain, gain_24h_midpoint_ist, five_min_ratio,
+                    likes_gain, comments_val, engagement_rate, comparison_drops
                 ))
 
             # newest-first for UI
@@ -1690,25 +1733,7 @@ def build_video_display(vid: str):
             "remaining_seconds": int(remaining_seconds)
         })
 
-    comparison_configs = []
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT id, compare_video_id, compare_offset_days, column_name FROM comparison_configs WHERE video_id=%s ORDER BY id ASC",
-            (vid,)
-        )
-        comparison_configs = cur.fetchall() or []
-
-    if compare_video_id and compare_offset_days is not None:
-        compare_meta = {"compare_video_id": compare_video_id, "offset_days": compare_offset_days}
-        if not comparison_configs:
-            comparison_configs = [{
-                "id": None,
-                "compare_video_id": compare_video_id,
-                "compare_offset_days": compare_offset_days,
-                "column_name": "Default comparison"
-            }]
-    else:
-        compare_meta = None
+    compare_meta = None
 
     result = {
         "video_id": vrow["video_id"],
@@ -2092,29 +2117,24 @@ def video_stats(video_id):
                 comp_rows = [{
                     "id": "legacy",
                     "compare_video_id": legacy.get("compare_video_id"),
-                    "compare_offset_days": int(legacy.get("compare_offset_days")),
+                    "compare_offset_days": 0,
                     "column_name": "Default comparison"
                 }]
 
     for comp in comp_rows:
         key = str(comp.get("id"))
         comp_video_id = comp.get("compare_video_id")
-        try:
-            offset_days = int(comp.get("compare_offset_days"))
-        except Exception:
-            continue
         if not comp_video_id:
             continue
 
-        comparison_date = sel_date - timedelta(days=offset_days)
-        comp_hourly = fetch_hourly_for_ist_date(comp_video_id, comparison_date)
+        # strict same-date/same-hour mapping for hourly view
+        comp_hourly = fetch_hourly_for_ist_date(comp_video_id, sel_date)
         gains_by_hour = {r["hour"]: r.get("hour_gain") for r in comp_hourly}
 
         comparison_columns.append({
             "key": key,
             "name": (comp.get("column_name") or comp_video_id).strip() or comp_video_id,
-            "video_id": comp_video_id,
-            "comparison_date": comparison_date.isoformat()
+            "video_id": comp_video_id
         })
 
         for row in hourly:
@@ -2714,11 +2734,10 @@ def add_target(video_id):
 @login_required
 def set_comparison(video_id):
     comp_link = (request.form.get("comparison_link") or "").strip()
-    comp_date_str = (request.form.get("comparison_date") or "").strip()
     column_name = (request.form.get("comparison_name") or "").strip()
 
     # reset all comparisons when form is submitted empty
-    if not comp_link and not comp_date_str and not column_name:
+    if not comp_link and not column_name:
         conn = db()
         with conn.cursor() as cur:
             cur.execute("DELETE FROM comparison_configs WHERE video_id=%s", (video_id,))
@@ -2726,6 +2745,8 @@ def set_comparison(video_id):
                 "UPDATE video_list SET compare_video_id=NULL, compare_offset_days=NULL WHERE video_id=%s",
                 (video_id,)
             )
+        with _video_display_cache_lock:
+            _video_display_cache.pop(video_id, None)
         flash("All comparisons cleared for this video.", "info")
         return redirect(url_for("video_detail", video_id=video_id))
 
@@ -2734,26 +2755,19 @@ def set_comparison(video_id):
         flash("Invalid comparison video link / id.", "danger")
         return redirect(url_for("video_detail", video_id=video_id))
 
-    try:
-        comp_date = datetime.fromisoformat(comp_date_str).date()
-    except Exception:
-        flash("Invalid comparison date (use YYYY-MM-DD).", "danger")
+    conn = db()
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT 1 FROM video_list WHERE video_id=%s AND is_deleted=FALSE",
+            (comp_vid,)
+        )
+        exists = cur.fetchone()
+    if not exists:
+        flash("Comparison video must already be tracked.", "danger")
         return redirect(url_for("video_detail", video_id=video_id))
 
     if not column_name:
         column_name = f"vs {comp_vid}"
-
-    conn = db()
-    with conn.cursor() as cur:
-        cur.execute("SELECT max(ts_utc) AS latest_ts FROM views WHERE video_id=%s", (video_id,))
-        r = cur.fetchone()
-
-    if not r or not r["latest_ts"]:
-        flash("Cannot set comparison: no data yet for this video.", "warning")
-        return redirect(url_for("video_detail", video_id=video_id))
-
-    latest_ist_date = r["latest_ts"].astimezone(IST).date()
-    offset_days = (latest_ist_date - comp_date).days
 
     conn = db()
     with conn.cursor() as cur:
@@ -2763,7 +2777,7 @@ def set_comparison(video_id):
                 INSERT INTO comparison_configs (video_id, compare_video_id, compare_offset_days, column_name)
                 VALUES (%s, %s, %s, %s)
                 """,
-                (video_id, comp_vid, offset_days, column_name)
+                (video_id, comp_vid, 0, column_name)
             )
         except Exception:
             flash("Comparison column name already exists. Please choose a unique name.", "danger")
@@ -2772,9 +2786,11 @@ def set_comparison(video_id):
         # keep legacy columns synced with latest selection for backward compatibility
         cur.execute(
             "UPDATE video_list SET compare_video_id=%s, compare_offset_days=%s WHERE video_id=%s",
-            (comp_vid, offset_days, video_id)
+            (comp_vid, 0, video_id)
         )
 
+    with _video_display_cache_lock:
+        _video_display_cache.pop(video_id, None)
     flash(f"Comparison added: {column_name}.", "success")
     return redirect(url_for("video_detail", video_id=video_id))
 
@@ -2788,6 +2804,8 @@ def remove_comparison(video_id, comparison_id):
             "DELETE FROM comparison_configs WHERE id=%s AND video_id=%s",
             (comparison_id, video_id)
         )
+    with _video_display_cache_lock:
+        _video_display_cache.pop(video_id, None)
     flash("Comparison removed.", "info")
     return redirect(url_for("video_detail", video_id=video_id))
 
@@ -2872,7 +2890,7 @@ def export_video(video_id):
     Export all stored rows for a video into Excel.
     Columns (in this order):
       Time (IST), Views, Gain (5 min), Hourly Gain (views), Hourly Likes Gain,
-      Gain (24 h), Daily Gain (views), 24h Midpoint Time, Compare diff,
+      Gain (24 h), Daily Gain (views), 24h Midpoint Time,
       Likes, Comments, Engagement Rate (%)
     """
     info = build_video_display(video_id)
@@ -2890,19 +2908,19 @@ def export_video(video_id):
         for tpl in day_rows:
             # tpl canonical shape:
             # (ts, views, gain5, hourly_views_gain, hourly_likes_gain, gain24, daily_views_gain,
-            #  midpoint_24h, comp_diff, five_min_ratio, likes_gain, comments_val, engagement_rate)
+            #  midpoint_24h, five_min_ratio, likes_gain, comments_val, engagement_rate, comparison_drops)
             ts = tpl[0]
             views = tpl[1] if len(tpl) > 1 else None
 
             # defaults
-            gain5 = hourly_views_gain = hourly_likes_gain = gain24 = daily_views_gain = midpoint_24h = comp_diff = five_min_ratio = likes_gain = comments = engagement_rate = None
+            gain5 = hourly_views_gain = hourly_likes_gain = gain24 = daily_views_gain = midpoint_24h = five_min_ratio = likes_gain = comments = engagement_rate = None
 
             rest = list(tpl[2:])  # remaining fields after ts and views
 
             # Map rest by position when present
-            # expected order for rest: gain5, hourly_views_gain, hourly_likes_gain, gain24, daily_views_gain, midpoint_24h, comp_diff, five_min_ratio, likes_gain, comments, engagement_rate
-            vals = rest + [None] * (11 - len(rest))
-            (gain5, hourly_views_gain, hourly_likes_gain, gain24, daily_views_gain, midpoint_24h, comp_diff, five_min_ratio, likes_gain, comments, engagement_rate) = vals[:11]
+            # expected order for rest: gain5, hourly_views_gain, hourly_likes_gain, gain24, daily_views_gain, midpoint_24h, five_min_ratio, likes_gain, comments, engagement_rate, comparison_drops
+            vals = rest + [None] * (10 - len(rest))
+            (gain5, hourly_views_gain, hourly_likes_gain, gain24, daily_views_gain, midpoint_24h, five_min_ratio, likes_gain, comments, engagement_rate) = vals[:10]
 
             eng_str = ""
             if engagement_rate is not None:
@@ -2920,7 +2938,6 @@ def export_video(video_id):
                 "Gain (24 h)": gain24 if gain24 is not None else "",
                 "Daily Gain (views)": daily_views_gain if daily_views_gain is not None else "",
                 "24h Midpoint Time": midpoint_24h if midpoint_24h is not None else "",
-                "Compare diff": comp_diff if comp_diff is not None else "",
                 "Likes": likes_gain if likes_gain is not None else "",
                 "Comments": comments if comments is not None else "",
                 "Engagement Rate (%)": eng_str
@@ -2977,7 +2994,7 @@ def export_video(video_id):
         # ensure column order in file by creating DataFrame with exact keys in order above
         cols_order = [
             "Time (IST)", "Views", "Gain (5 min)", "Hourly Gain (views)", "Hourly Likes Gain",
-            "Gain (24 h)", "Daily Gain (views)", "24h Midpoint Time", "Compare diff", "Likes", "Comments", "Engagement Rate (%)"
+            "Gain (24 h)", "Daily Gain (views)", "24h Midpoint Time", "Likes", "Comments", "Engagement Rate (%)"
         ]
         # if df_views lacks any column (edge case), create them to preserve order
         for c in cols_order:

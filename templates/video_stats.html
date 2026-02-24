@@ -84,7 +84,7 @@
         <div class="table-responsive">
           <table class="table table-sm">
             <thead>
-              <tr><th>Hour (IST)</th><th>End views</th><th>Hourly gain</th>{% for c in comparison_columns %}<th>{{ c.name }}<div class="small muted">{{ c.video_id }} · {{ c.comparison_date }}</div></th>{% endfor %}</tr>
+              <tr><th>Hour (IST)</th><th>End views</th><th>Hourly gain</th>{% for c in comparison_columns %}<th>{{ c.name }}<div class="small muted">{{ c.video_id }}</div></th>{% endfor %}</tr>
             </thead>
             <tbody>
               {% for h in hourly %}
