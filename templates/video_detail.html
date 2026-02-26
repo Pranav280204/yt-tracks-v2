@@ -264,44 +264,7 @@
   </div>
 
   <div class="content-wrap">
-    <!-- Comparison & Targets area -->
-    <div class="compare-box mb-3 card p-3">
-      <div class="d-flex align-items-center justify-content-between gap-2">
-        <div>
-          <strong>Compare with other video</strong>
-          <div class="small-note">Enter a tracked video link/ID and a custom column name. Each entry adds a new dynamic comparison column using exact matching timestamps.</div>
-        </div>
-        <div class="d-flex gap-2 align-items-center flex-wrap">
-          <form method="POST" class="d-flex gap-2 align-items-center flex-wrap" action="{{ url_for('set_comparison', video_id=v.video_id) }}">
-            <input name="comparison_link" class="form-control form-control-sm" placeholder="Compare video (link or id)" style="min-width:220px;">
-            <input name="comparison_name" class="form-control form-control-sm" placeholder="Column name (e.g. Pathaan)" style="min-width:220px;">
-            <button class="btn btn-sm btn-primary" type="submit">Add comparison</button>
-          </form>
-
-          <form method="POST" action="{{ url_for('set_comparison', video_id=v.video_id) }}">
-            <input type="hidden" name="comparison_link" value="">
-            <input type="hidden" name="comparison_name" value="">
-            <button class="btn btn-sm btn-outline-secondary" type="submit">Clear all</button>
-          </form>
-        </div>
-      </div>
-
-      {% if v.comparison_configs %}
-        <div class="mt-2 small-note">
-          {% for c in v.comparison_configs %}
-            <div class="d-flex align-items-center gap-2 mb-1">
-              <span><strong>{{ c.column_name }}</strong> → {{ c.compare_video_id }}</span>
-              {% if c.id is number %}
-              <form method="POST" action="{{ url_for('remove_comparison', video_id=v.video_id, comparison_id=c.id) }}" class="m-0">
-                <button class="btn btn-sm btn-outline-danger" type="submit">Remove</button>
-              </form>
-              {% endif %}
-            </div>
-          {% endfor %}
-        </div>
-      {% endif %}
-    </div>
-
+    <!-- Targets area -->
     <!-- Targets (full list + add form) -->
     <div id="targets" class="mt-1 mb-3">
       <h6 class="mb-2">🎯 Targets</h6>
