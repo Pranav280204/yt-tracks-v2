@@ -1158,6 +1158,17 @@ def process_gains(rows_asc: list[dict]):
     return out
 
 
+def format_signed_hms_diff(current_ts: datetime, previous_ts: datetime):
+    """Format current_ts - previous_ts as [sign]HH:MM:SS."""
+    delta_seconds = int((current_ts - previous_ts).total_seconds())
+    sign = "-" if delta_seconds < 0 else ""
+    total = abs(delta_seconds)
+    hours = total // 3600
+    minutes = (total % 3600) // 60
+    seconds = total % 60
+    return f"{sign}{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+
 # -----------------------------
 # Background sampler + channel snapshots
 # -----------------------------
@@ -1567,6 +1578,11 @@ def build_video_display(vid: str):
     if all_rows:
         # processed_all is chronological list of tuples from process_gains
         processed_all = process_gains(all_rows)
+        midpoint_by_ts = {
+            tpl[0]: tpl[7]
+            for tpl in processed_all
+            if len(tpl) > 7 and tpl[7] is not None
+        }
 
         # build grouped maps for main video
         grouped = {}
@@ -1599,6 +1615,19 @@ def build_video_display(vid: str):
                 (ts_ist, views, gain_5m, hourly_views_gain, hourly_likes_gain, gain_24h,
                  daily_views_gain, gain_24h_midpoint_ist, likes_val, comments_val) = tpl
                 time_part = ts_ist.split(" ")[1]
+
+                midpoint_diff_24h = None
+                if gain_24h_midpoint_ist is not None:
+                    try:
+                        target_row_ts_ist = (datetime.fromisoformat(ts_ist) - timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
+                        prior_midpoint_ist = midpoint_by_ts.get(target_row_ts_ist)
+                        if prior_midpoint_ist is not None:
+                            midpoint_diff_24h = format_signed_hms_diff(
+                                datetime.fromisoformat(gain_24h_midpoint_ist),
+                                datetime.fromisoformat(prior_midpoint_ist),
+                            )
+                    except Exception:
+                        midpoint_diff_24h = None
                 # --- strict same-timestamp comparison drops for each configured comparison ---
                 comparison_drops = {}
                 for comp in comparison_configs:
@@ -1663,11 +1692,11 @@ def build_video_display(vid: str):
 
                 # (ts_ist, views, gain_5m, hourly_views_gain, hourly_likes_gain, gain_24h,
                 #  daily_views_gain, gain_24h_midpoint_ist, five_min_ratio,
-                #  likes_gain, comments_val, engagement_rate, comparison_drops)
+                #  likes_gain, comments_val, engagement_rate, midpoint_diff_24h, comparison_drops)
                 display_rows.append((
                     ts_ist, views, gain_5m, hourly_views_gain, hourly_likes_gain, gain_24h,
                     daily_views_gain, gain_24h_midpoint_ist, five_min_ratio,
-                    likes_gain, comments_val, engagement_rate, comparison_drops
+                    likes_gain, comments_val, engagement_rate, midpoint_diff_24h, comparison_drops
                 ))
 
             # newest-first for UI
@@ -2890,7 +2919,7 @@ def export_video(video_id):
     Export all stored rows for a video into Excel.
     Columns (in this order):
       Time (IST), Views, Gain (5 min), Hourly Gain (views), Hourly Likes Gain,
-      Gain (24 h), Daily Gain (views), 24h Midpoint Time,
+      Gain (24 h), Daily Gain (views), 24h Midpoint Time, Midpoint Δ vs 24h ago,
       Likes, Comments, Engagement Rate (%)
     """
     info = build_video_display(video_id)
@@ -2908,19 +2937,19 @@ def export_video(video_id):
         for tpl in day_rows:
             # tpl canonical shape:
             # (ts, views, gain5, hourly_views_gain, hourly_likes_gain, gain24, daily_views_gain,
-            #  midpoint_24h, five_min_ratio, likes_gain, comments_val, engagement_rate, comparison_drops)
+            #  midpoint_24h, five_min_ratio, likes_gain, comments_val, engagement_rate, midpoint_diff_24h, comparison_drops)
             ts = tpl[0]
             views = tpl[1] if len(tpl) > 1 else None
 
             # defaults
-            gain5 = hourly_views_gain = hourly_likes_gain = gain24 = daily_views_gain = midpoint_24h = five_min_ratio = likes_gain = comments = engagement_rate = None
+            gain5 = hourly_views_gain = hourly_likes_gain = gain24 = daily_views_gain = midpoint_24h = five_min_ratio = likes_gain = comments = engagement_rate = midpoint_diff_24h = None
 
             rest = list(tpl[2:])  # remaining fields after ts and views
 
             # Map rest by position when present
-            # expected order for rest: gain5, hourly_views_gain, hourly_likes_gain, gain24, daily_views_gain, midpoint_24h, five_min_ratio, likes_gain, comments, engagement_rate, comparison_drops
-            vals = rest + [None] * (10 - len(rest))
-            (gain5, hourly_views_gain, hourly_likes_gain, gain24, daily_views_gain, midpoint_24h, five_min_ratio, likes_gain, comments, engagement_rate) = vals[:10]
+            # expected order for rest: gain5, hourly_views_gain, hourly_likes_gain, gain24, daily_views_gain, midpoint_24h, five_min_ratio, likes_gain, comments, engagement_rate, midpoint_diff_24h, comparison_drops
+            vals = rest + [None] * (11 - len(rest))
+            (gain5, hourly_views_gain, hourly_likes_gain, gain24, daily_views_gain, midpoint_24h, five_min_ratio, likes_gain, comments, engagement_rate, midpoint_diff_24h) = vals[:11]
 
             eng_str = ""
             if engagement_rate is not None:
@@ -2938,6 +2967,7 @@ def export_video(video_id):
                 "Gain (24 h)": gain24 if gain24 is not None else "",
                 "Daily Gain (views)": daily_views_gain if daily_views_gain is not None else "",
                 "24h Midpoint Time": midpoint_24h if midpoint_24h is not None else "",
+                "Midpoint Δ vs 24h ago": midpoint_diff_24h if midpoint_diff_24h is not None else "",
                 "Likes": likes_gain if likes_gain is not None else "",
                 "Comments": comments if comments is not None else "",
                 "Engagement Rate (%)": eng_str
@@ -2994,7 +3024,7 @@ def export_video(video_id):
         # ensure column order in file by creating DataFrame with exact keys in order above
         cols_order = [
             "Time (IST)", "Views", "Gain (5 min)", "Hourly Gain (views)", "Hourly Likes Gain",
-            "Gain (24 h)", "Daily Gain (views)", "24h Midpoint Time", "Likes", "Comments", "Engagement Rate (%)"
+            "Gain (24 h)", "Daily Gain (views)", "24h Midpoint Time", "Midpoint Δ vs 24h ago", "Likes", "Comments", "Engagement Rate (%)"
         ]
         # if df_views lacks any column (edge case), create them to preserve order
         for c in cols_order:
