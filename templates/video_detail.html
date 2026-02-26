@@ -92,6 +92,31 @@
     .table td, .table th { vertical-align:middle; font-size:.92rem; border-top:1px solid #fafafa; white-space:nowrap; }
     .table-card { padding:.75rem; border-radius:.5rem; border:1px solid var(--border); background:linear-gradient(180deg,#ffffff,#fbfcff); }
 
+    /* Video detail day-table color polish */
+    .table-card .table thead th {
+      background: linear-gradient(180deg, #f4f8ff 0%, #eef5ff 100%);
+      color: #1f3b73;
+      border-top: 0;
+      font-weight: 700;
+    }
+    .table-card .table tbody tr:nth-child(odd) { background: #fcfdff; }
+    .table-card .table tbody tr:nth-child(even) { background: #f8fbff; }
+    .table-card .table tbody tr td { border-top: 1px solid #eef2f7; }
+
+    /* Column accents */
+    .table-card .table tbody td:nth-child(2) { color: #0b5ed7; font-weight: 700; }
+    .table-card .table tbody td:nth-child(6) { color: #5f3dc4; font-weight: 700; }
+    .table-card .table tbody td:nth-child(7) {
+      background: rgba(255, 193, 7, 0.10);
+      color: #8a6d00;
+      font-weight: 700;
+    }
+    .table-card .table tbody td:nth-child(8) {
+      background: rgba(13, 202, 240, 0.10);
+      color: #0b7285;
+      font-weight: 700;
+    }
+
     /* make stats panel normal (not sticky or fixed-width) per request */
     .stats-panel { position:static; width:100%; align-self:flex-start; }
     .stat-large { font-size:1.5rem; font-weight:800; }
@@ -264,44 +289,7 @@
   </div>
 
   <div class="content-wrap">
-    <!-- Comparison & Targets area -->
-    <div class="compare-box mb-3 card p-3">
-      <div class="d-flex align-items-center justify-content-between gap-2">
-        <div>
-          <strong>Compare with other video</strong>
-          <div class="small-note">Enter a tracked video link/ID and a custom column name. Each entry adds a new dynamic comparison column using exact matching timestamps.</div>
-        </div>
-        <div class="d-flex gap-2 align-items-center flex-wrap">
-          <form method="POST" class="d-flex gap-2 align-items-center flex-wrap" action="{{ url_for('set_comparison', video_id=v.video_id) }}">
-            <input name="comparison_link" class="form-control form-control-sm" placeholder="Compare video (link or id)" style="min-width:220px;">
-            <input name="comparison_name" class="form-control form-control-sm" placeholder="Column name (e.g. Pathaan)" style="min-width:220px;">
-            <button class="btn btn-sm btn-primary" type="submit">Add comparison</button>
-          </form>
-
-          <form method="POST" action="{{ url_for('set_comparison', video_id=v.video_id) }}">
-            <input type="hidden" name="comparison_link" value="">
-            <input type="hidden" name="comparison_name" value="">
-            <button class="btn btn-sm btn-outline-secondary" type="submit">Clear all</button>
-          </form>
-        </div>
-      </div>
-
-      {% if v.comparison_configs %}
-        <div class="mt-2 small-note">
-          {% for c in v.comparison_configs %}
-            <div class="d-flex align-items-center gap-2 mb-1">
-              <span><strong>{{ c.column_name }}</strong> → {{ c.compare_video_id }}</span>
-              {% if c.id is number %}
-              <form method="POST" action="{{ url_for('remove_comparison', video_id=v.video_id, comparison_id=c.id) }}" class="m-0">
-                <button class="btn btn-sm btn-outline-danger" type="submit">Remove</button>
-              </form>
-              {% endif %}
-            </div>
-          {% endfor %}
-        </div>
-      {% endif %}
-    </div>
-
+    <!-- Targets area -->
     <!-- Targets (full list + add form) -->
     <div id="targets" class="mt-1 mb-3">
       <h6 class="mb-2">🎯 Targets</h6>

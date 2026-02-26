@@ -63,10 +63,6 @@
 
     <div class="col-12 col-lg-6">
       <h5>Hourly (IST) — {{ selected_date }}</h5>
-{% if compare_video_id %}
-      <div class="small muted mb-2">Comparison: <span class="mono">{{ compare_video_id }}</span>{% if comparison_date %} on {{ comparison_date }}{% endif %}</div>
-      {% endif %}
-
       <div class="d-flex gap-2 mb-2 align-items-center">
         <form method="get" action="{{ url_for('video_stats', video_id=video_id) }}" class="d-flex gap-2">
           <select name="date" class="form-select form-select-sm" style="min-width:170px;">
@@ -77,14 +73,13 @@
           <button class="btn btn-sm btn-primary" type="submit">Show</button>
         </form>
         <div class="ms-auto small muted">Times: IST (hours are rounded ranges)</div>
-      {% if not comparison_columns %}<div class="small muted">No comparisons configured.</div>{% endif %}
       </div>
 
       <div class="stat-card">
         <div class="table-responsive">
           <table class="table table-sm">
             <thead>
-              <tr><th>Hour (IST)</th><th>End views</th><th>Hourly gain</th>{% for c in comparison_columns %}<th>{{ c.name }}<div class="small muted">{{ c.video_id }}</div></th>{% endfor %}</tr>
+              <tr><th>Hour (IST)</th><th>End views</th><th>Hourly gain</th></tr>
             </thead>
             <tbody>
               {% for h in hourly %}
@@ -103,18 +98,7 @@
                       {% endif %}
                     {% endif %}
                   </td>
-                  {% for c in comparison_columns %}
-                  <td>
-                    {% set dp = (h.comparison_drops or {}).get(c.key) %}
-                    {% if dp is none %}
-                      <span class="muted">—</span>
-                    {% elif dp <= 0 %}
-                      <span class="gain-pos">{{ "{:.2f}".format(dp) }}%</span>
-                    {% else %}
-                      <span class="gain-neg">{{ "{:.2f}".format(dp) }}%</span>
-                    {% endif %}
-                  </td>
-                  {% endfor %}
+                  
                 </tr>
               {% endfor %}
             </tbody>

@@ -14,7 +14,7 @@
                 <th>24h Gain ⓘ</th>
                 <th>Daily View Gain</th>
                 <th>24h Midpoint Time</th>
-                {% for c in (v.comparison_configs or []) %}<th>{{ c.column_name }} (%)</th>{% endfor %}
+                <th>Midpoint Δ vs 24h ago</th>
                 <th>Likes Δ</th>
                 <th>Prediction</th>
                 <th>Engagement (%)</th>
@@ -34,7 +34,7 @@
                 {% set five_min_ratio = row[8] if row|length > 8 else None %}
                 {% set likes = row[9] if row|length > 9 else None %}
                 {% set engagement = row[11] if row|length > 11 else None %}
-                {% set comparison_drops = row[12] if row|length > 12 else {} %}
+                {% set midpoint_diff_24h = row[12] if row|length > 12 else None %}
                 <tr>
                   <td class="mono">{{ ts }}</td>
 
@@ -71,14 +71,11 @@
                     {% else %}{{ midpoint_24h }}{% endif %}
                   </td>
 
-                  {% for c in (v.comparison_configs or []) %}
-                  <td>
-                    {% set dp = (comparison_drops or {}).get((c.id|string)) %}
-                    {% if dp is none %}<span class="gain-null">—</span>
-                    {% elif dp <= 0 %}<span class="gain-pos">{{ "{:.2f}".format(dp) }}%</span>
-                    {% else %}<span class="gain-neg">{{ "{:.2f}".format(dp) }}%</span>{% endif %}
+                  <td class="mono">
+                    {% if midpoint_diff_24h is none %}<span class="gain-null">—</span>
+                    {% else %}{{ midpoint_diff_24h }}{% endif %}
                   </td>
-                  {% endfor %}
+
 
                   <td class="mono">
                     {% if likes is none %}<span class="gain-null">—</span>
