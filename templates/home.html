@@ -9,14 +9,11 @@
     :root {
       --bg:#0b0d12;
       --panel:#141720;
-      --panel-soft:#191d27;
       --border:#2a2f3a;
       --text:#ecf0ff;
       --muted:#9ba6bf;
       --accent:#ff5722;
       --accent-soft:rgba(255,87,34,.14);
-      --danger:#ff6f6f;
-      --ok:#6ee7a3;
     }
     * { box-sizing:border-box; }
     body {
@@ -25,11 +22,7 @@
       min-height:100vh;
       letter-spacing:.01em;
     }
-    .shell {
-      max-width: 1380px;
-      margin: 0 auto;
-      padding: 1.25rem;
-    }
+    .shell { max-width: 1380px; margin: 0 auto; padding: 1.25rem; }
     .frost {
       background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
       border:1px solid var(--border);
@@ -37,33 +30,15 @@
       box-shadow:0 20px 45px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.02);
       backdrop-filter: blur(6px);
     }
-    .header-title {
-      font-size: clamp(1.45rem, 2vw, 2.35rem);
-      font-weight: 700;
-      color: var(--accent);
-      margin: 0;
-    }
     .subtle { color: var(--muted); }
+    .header-title { font-size: clamp(1.45rem, 2vw, 2.35rem); font-weight: 700; color: var(--accent); margin: 0; }
 
-    .toolbar {
-      padding: 1rem;
-      display:grid;
-      gap: .8rem;
-      grid-template-columns: minmax(0, 1fr) auto;
-      align-items: center;
-    }
-    .toolbar form {
-      display:grid;
-      gap:.65rem;
-      grid-template-columns: minmax(0,1fr) auto;
-    }
     .form-control {
       background:#0f131b;
       border:1px solid var(--border);
       color:var(--text);
       border-radius:.85rem;
       min-height:48px;
-      transition:border-color .2s ease, box-shadow .2s ease;
     }
     .form-control::placeholder { color:#73809c; }
     .form-control:focus {
@@ -83,143 +58,75 @@
     }
     .btn-brand:hover { filter:brightness(1.05); transform:translateY(-1px); }
 
-    .top-actions .btn { border-radius:.75rem; }
+    .toolbar {
+      padding: 1rem;
+      display:grid;
+      gap: .8rem;
+      grid-template-columns: 1fr;
+    }
+    .toolbar form {
+      display:grid;
+      gap:.65rem;
+      grid-template-columns: minmax(0,1fr) auto;
+    }
+    .toolbar-search {
+      display:grid;
+      gap:.65rem;
+      grid-template-columns:minmax(0, 1fr) auto;
+      align-items:center;
+    }
 
     .videos-wrap { padding: 1.25rem; }
-    .videos-head {
-      text-align:center;
-      margin-bottom: 1.2rem;
-    }
-    .videos-title {
-      color:var(--accent);
-      margin-bottom:.2rem;
-      font-size:clamp(1.6rem,2vw,2.3rem);
-      font-weight:700;
-    }
+    .videos-head { text-align:center; margin-bottom: 1.2rem; }
+    .videos-title { color:var(--accent); margin-bottom:.2rem; font-size:clamp(1.6rem,2vw,2.3rem); font-weight:700; }
     .videos-count { color:var(--muted); }
 
-    .grid {
-      display:grid;
-      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-      gap:1rem;
-    }
-
+    .grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap:1rem; }
     .video-card {
       background: linear-gradient(180deg, #181c27 0%, #121621 100%);
       border:1px solid var(--border);
       border-radius:.9rem;
       overflow:hidden;
       box-shadow:0 10px 30px rgba(0,0,0,.28);
-      transform:translateY(0);
       transition:transform .22s ease, box-shadow .22s ease, border-color .22s ease;
-      position:relative;
     }
-    .video-card:hover {
-      transform:translateY(-3px);
-      box-shadow:0 16px 35px rgba(0,0,0,.36);
-      border-color:#3a4150;
-    }
+    .video-card:hover { transform:translateY(-3px); box-shadow:0 16px 35px rgba(0,0,0,.36); border-color:#3a4150; }
     .no-decor { text-decoration:none; color:inherit; display:block; }
     .thumb-wrap { position:relative; overflow:hidden; }
-    .thumb-img {
-      width:100%;
-      aspect-ratio:16/9;
-      object-fit:cover;
-      display:block;
-      background:#111;
-      transition:transform .5s ease;
-    }
+    .thumb-img { width:100%; aspect-ratio:16/9; object-fit:cover; display:block; background:#111; transition:transform .5s ease; }
     .video-card:hover .thumb-img { transform:scale(1.03); }
 
     .pill {
-      position:absolute;
-      left:10px;
-      top:10px;
-      background:rgba(11,13,18,.8);
-      border:1px solid rgba(255,255,255,.18);
-      color:#e5ebff;
-      font-size:.73rem;
-      border-radius:999px;
-      padding:.2rem .5rem;
-      max-width:calc(100% - 20px);
-      white-space:nowrap;
-      text-overflow:ellipsis;
-      overflow:hidden;
+      position:absolute; left:10px; top:10px;
+      background:rgba(11,13,18,.8); border:1px solid rgba(255,255,255,.18);
+      color:#e5ebff; font-size:.73rem; border-radius:999px; padding:.2rem .5rem;
+      max-width:calc(100% - 20px); white-space:nowrap; text-overflow:ellipsis; overflow:hidden;
     }
-    .pill-right {
-      right:10px;
-      left:auto;
-      background:var(--accent-soft);
-      border-color:rgba(255,87,34,.38);
-      color:#ffd4c8;
-      font-weight:600;
-    }
-    .video-body { padding:.75rem .82rem .82rem; }
-    .video-title {
-      margin:0;
-      line-height:1.3;
-      font-size:1rem;
-      min-height:2.6em;
-      color:#f7f9ff;
-    }
+    .pill-right { right:10px; left:auto; background:var(--accent-soft); border-color:rgba(255,87,34,.38); color:#ffd4c8; font-weight:600; }
 
-    .meta {
-      margin-top:.5rem;
-      display:grid;
-      gap:.2rem;
-      color:var(--muted);
-      font-size:.85rem;
-    }
+    .video-body { padding:.75rem .82rem .82rem; }
+    .video-title { margin:0; line-height:1.3; font-size:1rem; min-height:2.6em; color:#f7f9ff; }
+    .meta { margin-top:.5rem; display:grid; gap:.2rem; color:var(--muted); font-size:.85rem; }
 
     .status {
-      display:inline-flex;
-      align-items:center;
-      gap:.35rem;
-      border-radius:999px;
-      padding:.16rem .5rem;
-      font-size:.72rem;
-      border:1px solid transparent;
-      font-weight:600;
-      width:max-content;
+      display:inline-flex; align-items:center; gap:.35rem; border-radius:999px;
+      padding:.16rem .5rem; font-size:.72rem; border:1px solid transparent; font-weight:600; width:max-content;
     }
     .status.active { color:#d6ffea; background:rgba(18,120,74,.22); border-color:rgba(60,194,131,.45); }
     .status.paused { color:#d9deea; background:rgba(123,131,153,.18); border-color:rgba(180,188,209,.3); }
     .status.deleted { color:#ffd4d4; background:rgba(190,55,55,.24); border-color:rgba(255,111,111,.42); }
 
-    .actions {
-      padding:.2rem .82rem .82rem;
-      display:flex;
-      gap:.45rem;
-      justify-content:flex-end;
-    }
-
+    .actions { padding:.2rem .82rem .82rem; display:flex; gap:.45rem; justify-content:flex-end; }
     .btn-ghost {
-      color:#d8e1f5;
-      border:1px solid var(--border);
-      background:#161b27;
-      border-radius:.65rem;
-      font-size:.82rem;
-      padding:.3rem .62rem;
-      text-decoration:none;
-      transition:all .2s ease;
+      color:#d8e1f5; border:1px solid var(--border); background:#161b27;
+      border-radius:.65rem; font-size:.82rem; padding:.3rem .62rem; text-decoration:none; transition:all .2s ease;
     }
-    .btn-ghost:hover {
-      border-color:var(--accent);
-      color:#fff;
-      background:#1d2230;
-    }
-    .empty {
-      text-align:center;
-      color:var(--muted);
-      padding:2rem 1rem;
-      border:1px dashed #313847;
-      border-radius:1rem;
-      background:rgba(255,255,255,.01);
-    }
+    .btn-ghost:hover { border-color:var(--accent); color:#fff; background:#1d2230; }
+
+    .empty { text-align:center; color:var(--muted); padding:2rem 1rem; border:1px dashed #313847; border-radius:1rem; }
 
     @media (max-width: 768px) {
-      .toolbar,
-      .toolbar form { grid-template-columns: 1fr; }
+      .toolbar form, .toolbar-search { grid-template-columns: 1fr; }
       .grid { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
     }
   </style>
@@ -229,10 +136,9 @@
   <header class="frost p-3 p-md-4 mb-3">
     <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
       <div>
-        <h1 class="header-title">Channel Videos</h1>
-        <div class="subtle">Smooth dashboard for all tracked and removed videos</div>
+        <h1 class="header-title">Pranav Youtube Video Tracker</h1>
       </div>
-      <div class="d-flex align-items-center gap-2 top-actions">
+      <div class="d-flex align-items-center gap-2">
         {% if current_user %}
           <span class="small subtle d-none d-md-inline">Logged in as <strong>{{ current_user.username }}</strong></span>
           <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_users') }}">Add user</a>
@@ -262,21 +168,24 @@
       <input class="form-control" type="url" name="link" placeholder="Paste YouTube link (youtube.com or youtu.be)" required>
       <button class="btn btn-brand" type="submit">Add & Start Tracking</button>
     </form>
-    <div class="subtle small">Includes soft-deleted videos for history tracking.</div>
+    <div class="toolbar-search">
+      <input class="form-control" id="homeSearchInput" type="search" placeholder="Search videos by title, ID, or status...">
+      <span class="subtle small">Includes soft-deleted videos.</span>
+    </div>
   </section>
 
   <section class="frost videos-wrap">
     <div class="videos-head">
       <h2 class="videos-title">Videos</h2>
-      <div class="videos-count">{{ videos|length }} total</div>
+      <div class="videos-count"><span id="visibleVideoCount">{{ videos|length }}</span> / {{ videos|length }} visible</div>
     </div>
 
     {% if videos|length == 0 %}
       <div class="empty">No videos available yet — add one using the form above.</div>
     {% else %}
-      <div class="grid">
+      <div class="grid" id="videoGrid">
         {% for v in videos %}
-          <article class="video-card" data-video-id="{{ v.video_id }}">
+          <article class="video-card" data-video-id="{{ v.video_id }}" data-search="{{ (v.short_title ~ ' ' ~ v.video_id ~ ' ' ~ ('soft-deleted' if v.is_deleted else ('tracking' if v.is_tracking else 'paused'))) | lower }}">
             <a class="no-decor" href="{{ url_for('video_detail', video_id=v.video_id) }}">
               <div class="thumb-wrap">
                 <img class="thumb-img" src="{{ v.thumbnail }}" alt="thumbnail for {{ v.short_title }}">
@@ -326,14 +235,40 @@
 <script>
   (function(){
     const cards = new Map();
-    document.querySelectorAll('[data-video-id]').forEach((card) => {
+    const cardList = Array.from(document.querySelectorAll('[data-video-id]'));
+    const searchInput = document.getElementById('homeSearchInput');
+    const visibleCountEl = document.getElementById('visibleVideoCount');
+
+    cardList.forEach((card) => {
       const vid = card.getAttribute('data-video-id');
       if (vid) cards.set(vid, card);
     });
+
+    function refreshVisibleCount() {
+      if (!visibleCountEl) return;
+      const visibleCount = cardList.filter((card) => card.style.display !== 'none').length;
+      visibleCountEl.textContent = String(visibleCount);
+    }
+
+    function applySearch() {
+      if (!searchInput) return;
+      const q = (searchInput.value || '').trim().toLowerCase();
+      cardList.forEach((card) => {
+        const searchable = card.getAttribute('data-search') || '';
+        card.style.display = (!q || searchable.includes(q)) ? '' : 'none';
+      });
+      refreshVisibleCount();
+    }
+
+    if (searchInput) {
+      searchInput.addEventListener('input', applySearch);
+      applySearch();
+    }
+
     if (!cards.size) return;
 
     let controller = null;
-    const POLL_MS = 5 * 1000;
+    const POLL_MS = 5000;
 
     function updateCard(card, data) {
       const viewsEl = card.querySelector('[data-live-views]');
