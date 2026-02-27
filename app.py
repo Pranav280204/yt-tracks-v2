@@ -2244,7 +2244,11 @@ def home():
     t0 = time.time()
     conn = db()
     with conn.cursor() as cur:
-        cur.execute("SELECT video_id, name, is_tracking FROM video_list WHERE is_deleted=FALSE ORDER BY name")
+        cur.execute(
+            "SELECT video_id, name, is_tracking, is_deleted "
+            "FROM video_list "
+            "ORDER BY is_deleted ASC, name"
+        )
         videos = cur.fetchall()
     t_db_videos = time.time()
 
@@ -2282,6 +2286,7 @@ def home():
             "short_title": short_title,
             "thumbnail": thumb,
             "is_tracking": bool(v["is_tracking"]),
+            "is_deleted": bool(v["is_deleted"]),
             "channel_total_cached": channel_total,
             "latest_views": latest_views,
             "latest_ts": latest_ts,
@@ -2301,7 +2306,7 @@ def home():
 def home_json():
     conn = db()
     with conn.cursor() as cur:
-        cur.execute("SELECT video_id FROM video_list WHERE is_deleted=FALSE ORDER BY name")
+        cur.execute("SELECT video_id FROM video_list ORDER BY is_deleted ASC, name")
         video_rows = cur.fetchall()
 
     video_ids = [v["video_id"] for v in video_rows]
