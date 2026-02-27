@@ -6,33 +6,149 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    body { background:#ffffff; color:#0a0a0a; }
-    .card-thumb { border:1px solid #e6e6e6; border-radius:.5rem; overflow:hidden; transition:box-shadow .12s ease; position:relative; }
-    .card-thumb:hover { box-shadow:0 6px 18px rgba(0,0,0,.06); }
-    .thumb-img { width:100%; height:140px; object-fit:cover; display:block; background:#f2f2f2; }
-    .card-title { font-size:0.95rem; margin:0; line-height:1.25; }
-    .muted { color:#6c757d; }
-    .grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap:1rem; }
-    .short-id { font-size:.78rem; color:#6c757d; }
-    a.no-decor { text-decoration:none; color:inherit; display:block; }
-    .badge-channel { position:absolute; left:10px; top:10px; background:rgba(0,0,0,0.7); color:#fff; font-size:.78rem; padding:.25rem .45rem; border-radius:.35rem; }
+    :root {
+      --bg:#0b0d12;
+      --panel:#141720;
+      --border:#2a2f3a;
+      --text:#ecf0ff;
+      --muted:#9ba6bf;
+      --accent:#ff5722;
+      --accent-soft:rgba(255,87,34,.14);
+    }
+    * { box-sizing:border-box; }
+    body {
+      background: radial-gradient(circle at top right, #1b2233 0%, #0b0d12 42%, #07090d 100%);
+      color:var(--text);
+      min-height:100vh;
+      letter-spacing:.01em;
+    }
+    .shell { max-width: 1380px; margin: 0 auto; padding: 1.25rem; }
+    .frost {
+      background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
+      border:1px solid var(--border);
+      border-radius:1.15rem;
+      box-shadow:0 20px 45px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.02);
+      backdrop-filter: blur(6px);
+    }
+    .subtle { color: var(--muted); }
+    .header-title { font-size: clamp(1.45rem, 2vw, 2.35rem); font-weight: 700; color: var(--accent); margin: 0; }
+
+    .form-control {
+      background:#0f131b;
+      border:1px solid var(--border);
+      color:var(--text);
+      border-radius:.85rem;
+      min-height:48px;
+    }
+    .form-control::placeholder { color:#73809c; }
+    .form-control:focus {
+      background:#0f131b;
+      color:var(--text);
+      border-color:var(--accent);
+      box-shadow:0 0 0 .2rem rgba(255,87,34,.18);
+    }
+    .btn-brand {
+      background:var(--accent);
+      border:1px solid transparent;
+      color:#fff;
+      font-weight:600;
+      border-radius:.85rem;
+      min-height:48px;
+      transition:transform .18s ease, filter .18s ease;
+    }
+    .btn-brand:hover { filter:brightness(1.05); transform:translateY(-1px); }
+
+    .toolbar {
+      padding: 1rem;
+      display:grid;
+      gap: .8rem;
+      grid-template-columns: 1fr;
+    }
+    .toolbar form {
+      display:grid;
+      gap:.65rem;
+      grid-template-columns: minmax(0,1fr) auto;
+    }
+    .toolbar-search {
+      display:grid;
+      gap:.65rem;
+      grid-template-columns:minmax(0, 1fr) auto;
+      align-items:center;
+    }
+
+    .videos-wrap { padding: 1.25rem; }
+    .videos-head { text-align:center; margin-bottom: 1.2rem; }
+    .videos-title { color:var(--accent); margin-bottom:.2rem; font-size:clamp(1.6rem,2vw,2.3rem); font-weight:700; }
+    .videos-count { color:var(--muted); }
+
+    .grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap:1rem; }
+    .video-card {
+      background: linear-gradient(180deg, #181c27 0%, #121621 100%);
+      border:1px solid var(--border);
+      border-radius:.9rem;
+      overflow:hidden;
+      box-shadow:0 10px 30px rgba(0,0,0,.28);
+      transition:transform .22s ease, box-shadow .22s ease, border-color .22s ease;
+    }
+    .video-card:hover { transform:translateY(-3px); box-shadow:0 16px 35px rgba(0,0,0,.36); border-color:#3a4150; }
+    .no-decor { text-decoration:none; color:inherit; display:block; }
+    .thumb-wrap { position:relative; overflow:hidden; }
+    .thumb-img { width:100%; aspect-ratio:16/9; object-fit:cover; display:block; background:#111; transition:transform .5s ease; }
+    .video-card:hover .thumb-img { transform:scale(1.03); }
+
+    .pill {
+      position:absolute; left:10px; top:10px;
+      background:rgba(11,13,18,.8); border:1px solid rgba(255,255,255,.18);
+      color:#e5ebff; font-size:.73rem; border-radius:999px; padding:.2rem .5rem;
+      max-width:calc(100% - 20px); white-space:nowrap; text-overflow:ellipsis; overflow:hidden;
+    }
+    .pill-right { right:10px; left:auto; background:var(--accent-soft); border-color:rgba(255,87,34,.38); color:#ffd4c8; font-weight:600; }
+
+    .video-body { padding:.75rem .82rem .82rem; }
+    .video-title { margin:0; line-height:1.3; font-size:1rem; min-height:2.6em; color:#f7f9ff; }
+    .meta { margin-top:.5rem; display:grid; gap:.2rem; color:var(--muted); font-size:.85rem; }
+
+    .status {
+      display:inline-flex; align-items:center; gap:.35rem; border-radius:999px;
+      padding:.16rem .5rem; font-size:.72rem; border:1px solid transparent; font-weight:600; width:max-content;
+    }
+    .status.active { color:#d6ffea; background:rgba(18,120,74,.22); border-color:rgba(60,194,131,.45); }
+    .status.paused { color:#d9deea; background:rgba(123,131,153,.18); border-color:rgba(180,188,209,.3); }
+    .status.deleted { color:#ffd4d4; background:rgba(190,55,55,.24); border-color:rgba(255,111,111,.42); }
+
+    .actions { padding:.2rem .82rem .82rem; display:flex; gap:.45rem; justify-content:flex-end; }
+    .btn-ghost {
+      color:#d8e1f5; border:1px solid var(--border); background:#161b27;
+      border-radius:.65rem; font-size:.82rem; padding:.3rem .62rem; text-decoration:none; transition:all .2s ease;
+    }
+    .btn-ghost:hover { border-color:var(--accent); color:#fff; background:#1d2230; }
+
+    .empty { text-align:center; color:var(--muted); padding:2rem 1rem; border:1px dashed #313847; border-radius:1rem; }
+
+    @media (max-width: 768px) {
+      .toolbar form, .toolbar-search { grid-template-columns: 1fr; }
+      .grid { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+    }
   </style>
 </head>
 <body>
-<div class="container py-4">
-  <div class="d-flex align-items-center justify-content-between mb-3">
-    <h1 class="mb-0">📺 YouTube Tracker</h1>
-    <div class="d-flex align-items-center gap-2">
-      {% if current_user %}
-        <span class="small text-muted d-none d-sm-inline">Logged in as <strong>{{ current_user.username }}</strong></span>
-
-        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin_users') }}">Add user</a>
-        <a class="btn btn-sm btn-outline-danger" href="{{ url_for('logout') }}">Logout</a>
-      {% else %}
-        <a class="btn btn-sm btn-primary" href="{{ url_for('login') }}">Login</a>
-      {% endif %}
+<div class="shell">
+  <header class="frost p-3 p-md-4 mb-3">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+      <div>
+        <h1 class="header-title">Pranav Youtube Video Tracker</h1>
+      </div>
+      <div class="d-flex align-items-center gap-2">
+        {% if current_user %}
+          <span class="small subtle d-none d-md-inline">Logged in as <strong>{{ current_user.username }}</strong></span>
+          <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_users') }}">Add user</a>
+          <a class="btn btn-sm btn-outline-danger" href="{{ url_for('logout') }}">Logout</a>
+        {% else %}
+          <a class="btn btn-sm btn-light" href="{{ url_for('login') }}">Login</a>
+        {% endif %}
+      </div>
     </div>
-  </div>
+  </header>
 
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
@@ -47,76 +163,112 @@
     {% endif %}
   {% endwith %}
 
-  <div class="card mb-4">
-    <div class="card-body">
-      <form class="row g-2" method="POST" action="{{ url_for('add_video') }}">
-        <div class="col-12 col-md-9">
-          <input class="form-control" type="url" name="link" placeholder="Paste YouTube link (youtube.com or youtu.be)" required>
-        </div>
-        <div class="col-12 col-md-3 d-grid">
-          <button class="btn btn-primary" type="submit">Add & Start Tracking</button>
-        </div>
-      </form>
+  <section class="frost toolbar mb-3">
+    <form method="POST" action="{{ url_for('add_video') }}">
+      <input class="form-control" type="url" name="link" placeholder="Paste YouTube link (youtube.com or youtu.be)" required>
+      <button class="btn btn-brand" type="submit">Add & Start Tracking</button>
+    </form>
+    <div class="toolbar-search">
+      <input class="form-control" id="homeSearchInput" type="search" placeholder="Search videos by title, ID, or status...">
+      <span class="subtle small">Includes soft-deleted videos.</span>
     </div>
-  </div>
+  </section>
 
-  <h5 class="mb-2">Tracked videos</h5>
+  <section class="frost videos-wrap">
+    <div class="videos-head">
+      <h2 class="videos-title">Videos</h2>
+      <div class="videos-count"><span id="visibleVideoCount">{{ videos|length }}</span> / {{ videos|length }} visible</div>
+    </div>
 
-  {% if videos|length == 0 %}
-    <p class="muted">No videos being tracked yet — add one using the form above.</p>
-  {% else %}
-    <div class="grid">
-      {% for v in videos %}
-        <div class="card-thumb" data-video-id="{{ v.video_id }}">
-          {% if v.channel_total_cached is not none %}
-            <div class="badge-channel">{{ "{:,}".format(v.channel_total_cached) }}</div>
-          {% endif %}
-          <a class="no-decor" href="{{ url_for('video_detail', video_id=v.video_id) }}">
-            <img class="thumb-img" src="{{ v.thumbnail }}" alt="thumbnail for {{ v.short_title }}">
-            <div style="padding:.6rem;">
-              <div class="card-title">{{ v.short_title }}</div>
-              <div class="d-flex justify-content-between align-items-center mt-1">
-                <div class="short-id">{{ v.video_id }}</div>
-                <div class="muted small">
-                  {% if v.is_tracking %}
-                    <span class="badge bg-success">tracking</span>
-                  {% else %}
-                    <span class="badge bg-secondary">paused</span>
-                  {% endif %}
+    {% if videos|length == 0 %}
+      <div class="empty">No videos available yet — add one using the form above.</div>
+    {% else %}
+      <div class="grid" id="videoGrid">
+        {% for v in videos %}
+          <article class="video-card" data-video-id="{{ v.video_id }}" data-search="{{ (v.short_title ~ ' ' ~ v.video_id ~ ' ' ~ ('soft-deleted' if v.is_deleted else ('tracking' if v.is_tracking else 'paused'))) | lower }}">
+            <a class="no-decor" href="{{ url_for('video_detail', video_id=v.video_id) }}">
+              <div class="thumb-wrap">
+                <img class="thumb-img" src="{{ v.thumbnail }}" alt="thumbnail for {{ v.short_title }}">
+                {% if v.channel_total_cached is not none %}
+                  <span class="pill">Channel: {{ "{:,}".format(v.channel_total_cached) }}</span>
+                {% endif %}
+                {% if v.is_deleted %}
+                  <span class="pill pill-right">Removed from tracking</span>
+                {% endif %}
+              </div>
+              <div class="video-body">
+                <p class="video-title">{{ v.short_title }}</p>
+                <div class="meta">
+                  <div>{{ v.video_id }}</div>
+                  <div>
+                    {% if v.is_deleted %}
+                      <span class="status deleted">soft-deleted</span>
+                    {% elif v.is_tracking %}
+                      <span class="status active">tracking</span>
+                    {% else %}
+                      <span class="status paused">paused</span>
+                    {% endif %}
+                  </div>
+                  <div data-live-views>
+                    Views: {% if v.latest_views is none %}—{% else %}{{ "{:,}".format(v.latest_views) }}{% endif %}
+                  </div>
+                  <div data-live-updated>
+                    Updated: {% if v.latest_ts_ist %}{{ v.latest_ts_ist }}{% else %}—{% endif %}
+                  </div>
                 </div>
               </div>
-              <div class="muted small mt-1" data-live-views>
-                Views: {% if v.latest_views is none %}—{% else %}{{ "{:,}".format(v.latest_views) }}{% endif %}
-              </div>
-              <div class="muted small" data-live-updated>
-                Updated: {% if v.latest_ts_ist %}{{ v.latest_ts_ist }}{% else %}—{% endif %}
-              </div>
+            </a>
+            <div class="actions">
+              <a class="btn-ghost" href="{{ url_for('video_stats', video_id=v.video_id) }}">Stats</a>
+              <a class="btn-ghost" href="{{ url_for('video_detail', video_id=v.video_id) }}">Details</a>
             </div>
-          </a>
-          <!-- ACTIONS: Stats / Details -->
-          <div style="padding:.45rem .6rem; display:flex; gap:.4rem; justify-content:flex-end;">
-            <a class="btn btn-sm btn-outline-info" href="{{ url_for('video_stats', video_id=v.video_id) }}">Stats</a>
-            <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('video_detail', video_id=v.video_id) }}">Details</a>
-          </div>
-        </div>
-      {% endfor %}
-    </div>
-  {% endif %}
+          </article>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </section>
 
-  <footer class="mt-4 muted text-center">Stored in PostgreSQL • UTC in DB, shown in IST</footer>
+  <footer class="mt-4 subtle text-center small">Stored in PostgreSQL • UTC in DB, shown in IST</footer>
 </div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
   (function(){
     const cards = new Map();
-    document.querySelectorAll('[data-video-id]').forEach((card) => {
+    const cardList = Array.from(document.querySelectorAll('[data-video-id]'));
+    const searchInput = document.getElementById('homeSearchInput');
+    const visibleCountEl = document.getElementById('visibleVideoCount');
+
+    cardList.forEach((card) => {
       const vid = card.getAttribute('data-video-id');
       if (vid) cards.set(vid, card);
     });
+
+    function refreshVisibleCount() {
+      if (!visibleCountEl) return;
+      const visibleCount = cardList.filter((card) => card.style.display !== 'none').length;
+      visibleCountEl.textContent = String(visibleCount);
+    }
+
+    function applySearch() {
+      if (!searchInput) return;
+      const q = (searchInput.value || '').trim().toLowerCase();
+      cardList.forEach((card) => {
+        const searchable = card.getAttribute('data-search') || '';
+        card.style.display = (!q || searchable.includes(q)) ? '' : 'none';
+      });
+      refreshVisibleCount();
+    }
+
+    if (searchInput) {
+      searchInput.addEventListener('input', applySearch);
+      applySearch();
+    }
+
     if (!cards.size) return;
 
     let controller = null;
-    const POLL_MS = 5 * 1000;
+    const POLL_MS = 5000;
 
     function updateCard(card, data) {
       const viewsEl = card.querySelector('[data-live-views]');

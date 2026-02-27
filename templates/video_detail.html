@@ -158,6 +158,30 @@
     /* allow table horizontal scroll */
     .table-responsive { overflow-x:auto; -webkit-overflow-scrolling:touch; }
 
+  
+
+    /* Dark theme alignment with home page */
+    body {
+      background: radial-gradient(circle at top right, #1b2233 0%, #0b0d12 42%, #07090d 100%);
+      color:#ecf0ff;
+    }
+    .container { max-width:1320px; }
+    .card, .table-card, .target-card, .live-counter {
+      background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
+      border:1px solid #2a2f3a !important;
+      box-shadow:0 16px 32px rgba(0,0,0,.28);
+      color:#ecf0ff;
+    }
+    .small-note, .live-sub, .stat-sub, .text-muted { color:#9ba6bf !important; }
+    .table { --bs-table-bg: transparent; --bs-table-color:#ecf0ff; --bs-table-border-color:#2a2f3a; }
+    .table-card .table thead th { background:rgba(255,87,34,.12); color:#ffd7ca; border-bottom:1px solid #2a2f3a; }
+    .table-card .table tbody tr:nth-child(odd), .table-card .table tbody tr:nth-child(even) { background:transparent; }
+    .table-card .table tbody tr td { border-top:1px solid #2a2f3a; }
+    .form-control, .form-select { background:#0f131b; border:1px solid #2a2f3a; color:#ecf0ff; }
+    .form-control:focus, .form-select:focus { background:#0f131b; color:#ecf0ff; border-color:#ff5722; box-shadow:0 0 0 .2rem rgba(255,87,34,.18); }
+    .btn-primary { background:#ff5722; border-color:#ff5722; }
+    .btn-outline-secondary, .btn-outline-primary { color:#e5ebff; border-color:#3a4150; }
+
   </style>
 </head>
 <body>
