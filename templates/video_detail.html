@@ -59,11 +59,12 @@
       align-items:center;
       padding:.35rem .6rem;
       border-radius:.45rem;
-      background:#f7f9fb;
-      border:1px solid var(--border);
+      background:rgba(255,255,255,.08);
+      border:1px solid #3a4150;
       margin-top:.45rem;
       font-size:.94rem;
       white-space:nowrap;
+      color:#f5f8ff;
     }
     .live-badge .dot { width:9px; height:9px; border-radius:50%; background:#28a745; }
     .live-sub { display:block; font-size:.85rem; color:var(--muted); margin-top:.12rem; }
@@ -181,6 +182,13 @@
     .form-control:focus, .form-select:focus { background:#0f131b; color:#ecf0ff; border-color:#ff5722; box-shadow:0 0 0 .2rem rgba(255,87,34,.18); }
     .btn-primary { background:#ff5722; border-color:#ff5722; }
     .btn-outline-secondary, .btn-outline-primary { color:#e5ebff; border-color:#3a4150; }
+    .btn-outline-warning { color:#ffd54a; border-color:#ffd54a; }
+    .btn-outline-warning:hover { background:#ffd54a; color:#171717; }
+    .btn-outline-danger { color:#ff7d7d; border-color:#ff7d7d; }
+    .btn-outline-danger:hover { background:#ff7d7d; color:#171717; }
+    .form-control::placeholder { color:#95a2bd; opacity:1; }
+    .mono { color:#e7efff; }
+    .card-compact { background:rgba(255,255,255,.03); border:1px solid #2a2f3a; border-radius:.6rem; padding:.65rem .75rem; }
 
   </style>
 </head>
@@ -193,7 +201,7 @@
     <div class="d-flex align-items-center gap-2">
       {% if current_user %}
         <span class="small text-muted d-none d-sm-inline">Logged in as <strong>{{ current_user.username }}</strong></span>
-        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin_users') }}">Add user</a>
+        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin_users') }}">Admin pannel</a>
         <a class="btn btn-sm btn-outline-danger" href="{{ url_for('logout') }}">Logout</a>
       {% else %}
         <a class="btn btn-sm btn-primary" href="{{ url_for('login') }}">Login</a>
