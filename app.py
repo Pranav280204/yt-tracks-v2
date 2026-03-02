@@ -2909,11 +2909,8 @@ def startup():
         log.info("Startup initialization complete.")
         return True
     except Exception as e:
-        log.exception("Startup initialization failed; app will keep running and retry on next request: %s", e)
+        log.error("Startup initialization deferred: %s", e)
         return False
-
-
-startup()
 
 
 @app.before_request
@@ -2923,4 +2920,5 @@ def ensure_startup_ready():
 
 
 if __name__ == "__main__":
+    startup()
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")))
