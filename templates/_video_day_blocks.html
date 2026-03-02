@@ -12,9 +12,9 @@
                 <th>Gain (5 min)</th>
                 <th>Hourly Gain</th>
                 <th>24h Gain ⓘ</th>
-                <th>Change 24h vs prev day (%)</th>
-                <th>Projected (min) views</th>
-                <th>Compare diff</th>
+                <th>Daily View Gain</th>
+                <th>24h Midpoint Time</th>
+                <th>Midpoint Δ vs 24h ago</th>
                 <th>Likes Δ</th>
                 <th>Prediction</th>
                 <th>Engagement (%)</th>
@@ -29,11 +29,12 @@
                 {% set hourly_gain = row[3] if row|length > 3 else None %}
                 {% set prediction = row[4] if row|length > 4 else None %}
                 {% set gain24 = row[5] if row|length > 5 else None %}
-                {% set pct24 = row[6] if row|length > 6 else None %}
-                {% set projected = row[7] if row|length > 7 else None %}
-                {% set comp_diff = row[8] if row|length > 8 else None %}
-                {% set likes = row[10] if row|length > 10 else None %}
-                {% set engagement = row[12] if row|length > 12 else None %}
+                {% set daily_gain = row[6] if row|length > 6 else None %}
+                {% set midpoint_24h = row[7] if row|length > 7 else None %}
+                {% set five_min_ratio = row[8] if row|length > 8 else None %}
+                {% set likes = row[9] if row|length > 9 else None %}
+                {% set engagement = row[11] if row|length > 11 else None %}
+                {% set midpoint_diff_24h = row[12] if row|length > 12 else None %}
                 <tr>
                   <td class="mono">{{ ts }}</td>
 
@@ -59,23 +60,22 @@
                     {% else %}<span class="gain-neg">{{ "{:,}".format(gain24) }}</span>{% endif %}
                   </td>
 
-                  <td>
-                    {% if pct24 is none %}<span class="gain-null">—</span>
-                    {% elif pct24 > 0 %}<span class="num-pct-pos">+{{ ('{:.2f}'.format(pct24)) }}%</span>
-                    {% elif pct24 < 0 %}<span class="num-pct-neg">{{ ('{:.2f}'.format(pct24)) }}%</span>
-                    {% else %}<span>0.00%</span>{% endif %}
+                  <td class="mono">
+                    {% if daily_gain is none %}<span class="gain-null">—</span>
+                    {% elif daily_gain >= 0 %}<span class="num-likes">+{{ "{:,}".format(daily_gain) }}</span>
+                    {% else %}<span class="gain-neg">{{ "{:,}".format(daily_gain) }}</span>{% endif %}
                   </td>
 
-                  <td>
-                    {% if projected is none %}<span class="gain-null">—</span>
-                    {% else %}<span class="num-projected mono">{{ "{:,}".format(projected) }}</span>{% endif %}
+                  <td class="mono">
+                    {% if midpoint_24h is none %}<span class="gain-null">—</span>
+                    {% else %}{{ midpoint_24h }}{% endif %}
                   </td>
 
-                  <td>
-                    {% if comp_diff is none %}<span class="gain-null">—</span>
-                    {% elif comp_diff >= 0 %}<span class="gain-pos">+{{ "{:,}".format(comp_diff) }}</span>
-                    {% else %}<span class="gain-neg">{{ "{:,}".format(comp_diff) }}</span>{% endif %}
+                  <td class="mono">
+                    {% if midpoint_diff_24h is none %}<span class="gain-null">—</span>
+                    {% else %}{{ midpoint_diff_24h }}{% endif %}
                   </td>
+
 
                   <td class="mono">
                     {% if likes is none %}<span class="gain-null">—</span>
