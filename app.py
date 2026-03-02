@@ -1642,6 +1642,11 @@ def build_video_display(vid: str):
             processed = grouped[date_str]
             display_rows = []
 
+            # previous day map for tolerant same-time comparisons (used for 24h delta-of-delta)
+            prev_date = (datetime.fromisoformat(date_str).date() - timedelta(days=1)).isoformat()
+            prev_rows = grouped.get(prev_date, [])
+            prev_map = {r[0].split(" ")[1]: r for r in prev_rows}
+
             # track previous likes for same-date chronological samples so we can compute likes gain
             prev_likes_for_date = None
 
@@ -1657,6 +1662,7 @@ def build_video_display(vid: str):
                 prev_tpl = prev_map.get(time_part) or find_closest_tpl(prev_map, time_part, tolerance_seconds=10)
                 prev_gain24 = prev_tpl[5] if prev_tpl else None
                 pct24_calc = None
+                midpoint_diff_24h = None
                 if prev_gain24 not in (None, 0):
                     try:
                         target_epoch = int((datetime.fromisoformat(ts_ist).replace(tzinfo=IST) - timedelta(days=1)).timestamp())
