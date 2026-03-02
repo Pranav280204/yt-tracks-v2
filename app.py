@@ -49,6 +49,10 @@ log = logging.getLogger("yt-tracker")
 IST = ZoneInfo("Asia/Kolkata")
 
 
+class DatabaseUnavailableError(RuntimeError):
+    """Raised when database is not configured or temporarily unreachable."""
+
+
 # -----------------------------
 # Env & cache TTL
 # -----------------------------
@@ -97,6 +101,7 @@ def require_admin_secret_from_form(form, redirect_endpoint, **redirect_kwargs):
     return None
 
 CHANNEL_CACHE_TTL = int(os.getenv("CHANNEL_CACHE_TTL", "50"))  # seconds; < sampler interval
+STARTUP_RETRY_INTERVAL = int(os.getenv("STARTUP_RETRY_INTERVAL", "30"))
 if not POSTGRES_URL:
     log.warning("DATABASE_URL not set.")
 
@@ -373,19 +378,22 @@ def db():
     global _db
     with _db_lock:
         if not POSTGRES_URL:
-            raise RuntimeError("DATABASE_URL is not set")
+            raise DatabaseUnavailableError("DATABASE_URL is not set")
         if _db is None or _db.closed:
-            _db = psycopg.connect(
-                POSTGRES_URL,
-                autocommit=True,
-                row_factory=dict_row,
-                connect_timeout=5,
-                options="-c statement_timeout=15000",
-                keepalives=1,
-                keepalives_idle=30,
-                keepalives_interval=10,
-                keepalives_count=5,
-            )
+            try:
+                _db = psycopg.connect(
+                    POSTGRES_URL,
+                    autocommit=True,
+                    row_factory=dict_row,
+                    connect_timeout=5,
+                    options="-c statement_timeout=15000",
+                    keepalives=1,
+                    keepalives_idle=30,
+                    keepalives_interval=10,
+                    keepalives_count=5,
+                )
+            except psycopg.OperationalError as e:
+                raise DatabaseUnavailableError(str(e)) from e
         return _db
 
 def init_db():
@@ -576,7 +584,11 @@ def get_current_user():
     if not uid or not token:
         return None
 
-    conn = db()
+    try:
+        conn = db()
+    except DatabaseUnavailableError:
+        return None
+
     with conn.cursor() as cur:
         cur.execute(
             "SELECT id, username, current_session_token, is_active "
@@ -2895,21 +2907,29 @@ def export_video(video_id):
 
 # Bootstrap
 _STARTUP_READY = False
+_STARTUP_LAST_ATTEMPT = 0.0
 
 
-def startup():
+def startup(force: bool = False):
     """Initialize DB and background workers without crashing process on transient DB issues."""
-    global _STARTUP_READY
+    global _STARTUP_READY, _STARTUP_LAST_ATTEMPT
     if _STARTUP_READY:
         return True
+    now_ts = time.time()
+    if (not force) and (now_ts - _STARTUP_LAST_ATTEMPT < STARTUP_RETRY_INTERVAL):
+        return False
+    _STARTUP_LAST_ATTEMPT = now_ts
     try:
         init_db()
         start_background()
         _STARTUP_READY = True
         log.info("Startup initialization complete.")
         return True
-    except Exception as e:
+    except DatabaseUnavailableError as e:
         log.error("Startup initialization deferred: %s", e)
+        return False
+    except Exception as e:
+        log.exception("Startup initialization failed unexpectedly: %s", e)
         return False
 
 
@@ -2919,6 +2939,14 @@ def ensure_startup_ready():
         startup()
 
 
+@app.errorhandler(DatabaseUnavailableError)
+def handle_db_unavailable(err):
+    log.error("Database unavailable while handling %s %s: %s", request.method, request.path, err)
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "database_unavailable", "message": "Database temporarily unavailable"}), 503
+    return make_response("Database temporarily unavailable. Please try again in a moment.", 503)
+
+
 if __name__ == "__main__":
-    startup()
+    startup(force=True)
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")))
