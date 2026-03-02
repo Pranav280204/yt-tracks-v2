@@ -372,6 +372,8 @@ _db_lock = threading.Lock()
 def db():
     global _db
     with _db_lock:
+        if not POSTGRES_URL:
+            raise RuntimeError("DATABASE_URL is not set")
         if _db is None or _db.closed:
             _db = psycopg.connect(
                 POSTGRES_URL,
@@ -2892,8 +2894,33 @@ def export_video(video_id):
 
 
 # Bootstrap
-init_db()
-start_background()
+_STARTUP_READY = False
+
+
+def startup():
+    """Initialize DB and background workers without crashing process on transient DB issues."""
+    global _STARTUP_READY
+    if _STARTUP_READY:
+        return True
+    try:
+        init_db()
+        start_background()
+        _STARTUP_READY = True
+        log.info("Startup initialization complete.")
+        return True
+    except Exception as e:
+        log.exception("Startup initialization failed; app will keep running and retry on next request: %s", e)
+        return False
+
+
+startup()
+
+
+@app.before_request
+def ensure_startup_ready():
+    if not _STARTUP_READY:
+        startup()
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")))
