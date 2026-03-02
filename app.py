@@ -49,10 +49,15 @@ log = logging.getLogger("yt-tracker")
 IST = ZoneInfo("Asia/Kolkata")
 
 
+class DatabaseUnavailableError(RuntimeError):
+    """Raised when database is not configured or temporarily unreachable."""
+
+
 # -----------------------------
 # Env & cache TTL
 # -----------------------------
 API_KEY = os.getenv("YOUTUBE_API_KEY", "")
+API_KEYS_RAW = os.getenv("YOUTUBE_API_KEYS", "")
 POSTGRES_URL = os.getenv("DATABASE_URL")
 # Reference video id used for 5-min ratio comparison
 REF_COMPARE_VIDEO_ID = "YxWlaYCA8MU"
@@ -96,17 +101,81 @@ def require_admin_secret_from_form(form, redirect_endpoint, **redirect_kwargs):
     return None
 
 CHANNEL_CACHE_TTL = int(os.getenv("CHANNEL_CACHE_TTL", "50"))  # seconds; < sampler interval
+STARTUP_RETRY_INTERVAL = int(os.getenv("STARTUP_RETRY_INTERVAL", "30"))
 if not POSTGRES_URL:
     log.warning("DATABASE_URL not set.")
 
-# YouTube client
-YOUTUBE = None
-if API_KEY:
+# YouTube clients (supports multiple keys to reduce quota bottlenecks)
+def _parse_youtube_api_keys() -> list[str]:
+    keys: list[str] = []
+    if API_KEYS_RAW:
+        keys.extend([k.strip() for k in API_KEYS_RAW.split(",") if k.strip()])
+    if API_KEY and API_KEY not in keys:
+        keys.append(API_KEY)
+    if MRBEAST_API_KEY and MRBEAST_API_KEY not in keys:
+        keys.append(MRBEAST_API_KEY)
+    return keys
+
+
+def _is_quota_error(err: HttpError) -> bool:
+    payload = ""
     try:
-        YOUTUBE = build("youtube", "v3", developerKey=API_KEY, cache_discovery=False)
-        log.info("YouTube client ready.")
+        payload = err.content.decode("utf-8", errors="ignore") if err.content else ""
+    except Exception:
+        payload = str(err)
+    lowered = payload.lower()
+    return (
+        "quotaexceeded" in lowered
+        or "dailylimitexceeded" in lowered
+        or "ratelimitexceeded" in lowered
+        or "userratelimitexceeded" in lowered
+    )
+
+
+YOUTUBE_CLIENTS = []
+for idx, key in enumerate(_parse_youtube_api_keys(), start=1):
+    try:
+        YOUTUBE_CLIENTS.append(build("youtube", "v3", developerKey=key, cache_discovery=False))
+        log.info("YouTube client #%s ready.", idx)
     except Exception as e:
-        log.exception("YouTube init failed: %s", e)
+        log.exception("YouTube init failed for key #%s: %s", idx, e)
+
+YOUTUBE = YOUTUBE_CLIENTS[0] if YOUTUBE_CLIENTS else None
+_youtube_rr_lock = threading.Lock()
+_youtube_rr_index = 0
+
+
+def youtube_execute(request_factory, op_name: str = "YouTube API call"):
+    """
+    Execute a YouTube request with round-robin + quota failover across configured API keys.
+    request_factory: callable(client) -> googleapiclient request
+    Returns response dict or None if all clients failed.
+    """
+    global _youtube_rr_index
+    if not YOUTUBE_CLIENTS:
+        return None
+
+    with _youtube_rr_lock:
+        start_idx = _youtube_rr_index % len(YOUTUBE_CLIENTS)
+        _youtube_rr_index += 1
+
+    for offset in range(len(YOUTUBE_CLIENTS)):
+        idx = (start_idx + offset) % len(YOUTUBE_CLIENTS)
+        client = YOUTUBE_CLIENTS[idx]
+        try:
+            return request_factory(client).execute()
+        except HttpError as e:
+            if _is_quota_error(e):
+                log.warning("%s hit quota on key index %s; trying next key.", op_name, idx)
+                continue
+            log.error("%s HTTP error on key index %s: %s", op_name, idx, e)
+            return None
+        except Exception as e:
+            log.error("%s error on key index %s: %s", op_name, idx, e)
+            return None
+
+    log.error("%s failed: quota exhausted on all configured keys.", op_name)
+    return None
 
 # simple in-memory cache for channel totals (to avoid bursts)
 _channel_views_cache: Dict[str, Tuple[Optional[int], float]] = {}
@@ -125,7 +194,12 @@ def get_channel_total_cached(channel_id: str) -> Optional[int]:
                 return val
     # fetch fresh
     try:
-        resp = YOUTUBE.channels().list(part="statistics", id=channel_id, maxResults=1).execute()
+        resp = youtube_execute(
+            lambda client: client.channels().list(part="statistics", id=channel_id, maxResults=1),
+            op_name="channels.statistics"
+        )
+        if not resp:
+            return None
         items = resp.get("items", [])
         if not items:
             val = None
@@ -165,7 +239,12 @@ def _mr_fetch_uploads_playlist_id():
     if not MR_YT:
         return None
     try:
-        r = MR_YT.channels().list(part="contentDetails", id=MRBEAST_CHANNEL_ID, maxResults=1).execute()
+        r = youtube_execute(
+            lambda client: client.channels().list(part="contentDetails", id=MRBEAST_CHANNEL_ID, maxResults=1),
+            op_name="mr.channels.contentDetails"
+        )
+        if not r:
+            return None
         items = r.get("items", [])
         if not items:
             return None
@@ -197,13 +276,15 @@ def _mr_get_all_video_ids(use_cache=True):
     next_tok = None
     try:
         while True:
-            resp = MR_YT.playlistItems().list(
+            resp = youtube_execute(lambda client, t=next_tok, p=playlist_id: client.playlistItems().list(
                 part="contentDetails",
-                playlistId=playlist_id,
+                playlistId=p,
                 maxResults=50,
-                pageToken=next_tok,
+                pageToken=t,
                 fields="nextPageToken,items(contentDetails/videoId)"
-            ).execute()
+            ), op_name="mr.playlistItems")
+            if not resp:
+                break
             for it in resp.get("items", []):
                 vid = it.get("contentDetails", {}).get("videoId")
                 if vid:
@@ -233,8 +314,17 @@ def _mr_sum_views_for_video_ids(video_ids: list[str]):
     try:
         for i in range(0, len(video_ids), 50):
             chunk = video_ids[i:i + 50]
-            resp = MR_YT.videos().list(part="statistics", id=",".join(chunk), maxResults=50,
-                                       fields="items/statistics(viewCount)").execute()
+            resp = youtube_execute(
+                lambda client, c=chunk: client.videos().list(
+                    part="statistics",
+                    id=",".join(c),
+                    maxResults=50,
+                    fields="items/statistics(viewCount)"
+                ),
+                op_name="mr.videos.statistics"
+            )
+            if not resp:
+                continue
             for it in resp.get("items", []):
                 try:
                     vc = int(it.get("statistics", {}).get("viewCount", 0) or 0)
@@ -287,18 +377,23 @@ _db_lock = threading.Lock()
 def db():
     global _db
     with _db_lock:
+        if not POSTGRES_URL:
+            raise DatabaseUnavailableError("DATABASE_URL is not set")
         if _db is None or _db.closed:
-            _db = psycopg.connect(
-                POSTGRES_URL,
-                autocommit=True,
-                row_factory=dict_row,
-                connect_timeout=5,
-                options="-c statement_timeout=15000",
-                keepalives=1,
-                keepalives_idle=30,
-                keepalives_interval=10,
-                keepalives_count=5,
-            )
+            try:
+                _db = psycopg.connect(
+                    POSTGRES_URL,
+                    autocommit=True,
+                    row_factory=dict_row,
+                    connect_timeout=5,
+                    options="-c statement_timeout=15000",
+                    keepalives=1,
+                    keepalives_idle=30,
+                    keepalives_interval=10,
+                    keepalives_count=5,
+                )
+            except psycopg.OperationalError as e:
+                raise DatabaseUnavailableError(str(e)) from e
         return _db
 
 def init_db():
@@ -489,7 +584,11 @@ def get_current_user():
     if not uid or not token:
         return None
 
-    conn = db()
+    try:
+        conn = db()
+    except DatabaseUnavailableError:
+        return None
+
     with conn.cursor() as cur:
         cur.execute(
             "SELECT id, username, current_session_token, is_active "
@@ -554,7 +653,12 @@ def fetch_title(video_id: str) -> str:
     if not YOUTUBE:
         return "Unknown"
     try:
-        r = YOUTUBE.videos().list(part="snippet", id=video_id, maxResults=1).execute()
+        r = youtube_execute(
+            lambda client: client.videos().list(part="snippet", id=video_id, maxResults=1),
+            op_name="videos.snippet.single"
+        )
+        if not r:
+            return "Unknown"
         items = r.get("items", [])
         return (items[0]["snippet"]["title"] if items else "Unknown")[:140] or "Unknown"
     except Exception as e:
@@ -613,7 +717,12 @@ def fetch_channel_id_for_videos(video_ids: list[str]) -> dict:
     try:
         for i in range(0, len(to_fetch), 50):
             chunk = to_fetch[i:i+50]
-            r = YOUTUBE.videos().list(part="snippet", id=",".join(chunk), maxResults=50).execute()
+            r = youtube_execute(
+                lambda client, c=chunk: client.videos().list(part="snippet", id=",".join(c), maxResults=50),
+                op_name="videos.snippet.batch"
+            )
+            if not r:
+                continue
             for it in r.get("items", []):
                 vid = it["id"]
                 ch = it.get("snippet", {}).get("channelId")
@@ -667,11 +776,16 @@ def fetch_stats_batch(video_ids: list[str]) -> dict:
     try:
         for i in range(0, len(video_ids), 50):
             chunk = video_ids[i:i + 50]
-            r = YOUTUBE.videos().list(
-                part="statistics",
-                id=",".join(chunk),
-                maxResults=50
-            ).execute()
+            r = youtube_execute(
+                lambda client, c=chunk: client.videos().list(
+                    part="statistics",
+                    id=",".join(c),
+                    maxResults=50
+                ),
+                op_name="videos.statistics.batch"
+            )
+            if not r:
+                continue
             for it in r.get("items", []):
                 vid = it["id"]
                 st = it.get("statistics", {})
@@ -1528,6 +1642,11 @@ def build_video_display(vid: str):
             processed = grouped[date_str]
             display_rows = []
 
+            # previous day map for tolerant same-time comparisons (used for 24h delta-of-delta)
+            prev_date = (datetime.fromisoformat(date_str).date() - timedelta(days=1)).isoformat()
+            prev_rows = grouped.get(prev_date, [])
+            prev_map = {r[0].split(" ")[1]: r for r in prev_rows}
+
             # track previous likes for same-date chronological samples so we can compute likes gain
             prev_likes_for_date = None
 
@@ -1543,6 +1662,7 @@ def build_video_display(vid: str):
                 prev_tpl = prev_map.get(time_part) or find_closest_tpl(prev_map, time_part, tolerance_seconds=10)
                 prev_gain24 = prev_tpl[5] if prev_tpl else None
                 pct24_calc = None
+                midpoint_diff_24h = None
                 if prev_gain24 not in (None, 0):
                     try:
                         target_epoch = int((datetime.fromisoformat(ts_ist).replace(tzinfo=IST) - timedelta(days=1)).timestamp())
@@ -2792,8 +2912,47 @@ def export_video(video_id):
 
 
 # Bootstrap
-init_db()
-start_background()
+_STARTUP_READY = False
+_STARTUP_LAST_ATTEMPT = 0.0
+
+
+def startup(force: bool = False):
+    """Initialize DB and background workers without crashing process on transient DB issues."""
+    global _STARTUP_READY, _STARTUP_LAST_ATTEMPT
+    if _STARTUP_READY:
+        return True
+    now_ts = time.time()
+    if (not force) and (now_ts - _STARTUP_LAST_ATTEMPT < STARTUP_RETRY_INTERVAL):
+        return False
+    _STARTUP_LAST_ATTEMPT = now_ts
+    try:
+        init_db()
+        start_background()
+        _STARTUP_READY = True
+        log.info("Startup initialization complete.")
+        return True
+    except DatabaseUnavailableError as e:
+        log.error("Startup initialization deferred: %s", e)
+        return False
+    except Exception as e:
+        log.exception("Startup initialization failed unexpectedly: %s", e)
+        return False
+
+
+@app.before_request
+def ensure_startup_ready():
+    if not _STARTUP_READY:
+        startup()
+
+
+@app.errorhandler(DatabaseUnavailableError)
+def handle_db_unavailable(err):
+    log.error("Database unavailable while handling %s %s: %s", request.method, request.path, err)
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "database_unavailable", "message": "Database temporarily unavailable"}), 503
+    return make_response("Database temporarily unavailable. Please try again in a moment.", 503)
+
 
 if __name__ == "__main__":
+    startup(force=True)
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")))
