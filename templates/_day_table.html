@@ -1,0 +1,101 @@
+<div class="day-block" data-date="{{ date }}">
+  <div class="card mb-3">
+    <div class="card-body table-card">
+      <h6 class="mb-3">{{ date }}</h6>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle">
+          <thead>
+            <tr>
+              <th>Time (IST)</th>
+              <th>Total Views</th>
+              <th>Gain (5 min)</th>
+              <th>Hourly Gain</th>
+              <th>Prediction</th>
+              <th>24h Gain ⓘ</th>
+              <th>Change 24h vs prev day (%)</th>
+              <th>Projected (min) views</th>
+              <th>Compare diff</th>
+              <th>Likes Δ</th>
+              <th>Engagement (%)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in day_rows %}
+              {% set ts = row[0] if row|length > 0 else None %}
+              {% set views = row[1] if row|length > 1 else None %}
+              {% set gain5 = row[2] if row|length > 2 else None %}
+              {% set hourly_gain = row[3] if row|length > 3 else None %}
+              {% set prediction = row[4] if row|length > 4 else None %}
+              {% set gain24 = row[5] if row|length > 5 else None %}
+              {% set pct24 = row[6] if row|length > 6 else None %}
+              {% set projected = row[7] if row|length > 7 else None %}
+              {% set comp_diff = row[8] if row|length > 8 else None %}
+              {% set likes = row[10] if row|length > 10 else None %}
+              {% set engagement = row[12] if row|length > 12 else None %}
+              <tr>
+                <td class="mono">{{ ts }}</td>
+
+                <td class="mono num-views">
+                  {% if views is none %}—{% else %}{{ "{:,}".format(views) }}{% endif %}
+                </td>
+
+                <td>
+                  {% if gain5 is none %}<span class="gain-null">—</span>
+                  {% elif gain5 >= 0 %}<span class="gain-pos">+{{ "{:,}".format(gain5) }}</span>
+                  {% else %}<span class="gain-neg">{{ "{:,}".format(gain5) }}</span>{% endif %}
+                </td>
+
+                <td>
+                  {% if hourly_gain is none %}<span class="gain-null">—</span>
+                  {% elif hourly_gain >= 0 %}<span class="gain-pos">+{{ "{:,}".format(hourly_gain) }}</span>
+                  {% else %}<span class="gain-neg">{{ "{:,}".format(hourly_gain) }}</span>{% endif %}
+                </td>
+
+                <td>
+                  {% if prediction is none %}<span class="gain-null">—</span>
+                  {% elif prediction >= 0 %}<span class="num-likes">+{{ "{:,}".format(prediction) }}</span>
+                  {% else %}<span class="gain-neg">{{ "{:,}".format(prediction) }}</span>{% endif %}
+                </td>
+
+                <td>
+                  {% if gain24 is none %}<span class="gain-null">—</span>
+                  {% elif gain24 >= 0 %}<span class="gain-pos">+{{ "{:,}".format(gain24) }}</span>
+                  {% else %}<span class="gain-neg">{{ "{:,}".format(gain24) }}</span>{% endif %}
+                </td>
+
+                <td>
+                  {% if pct24 is none %}<span class="gain-null">—</span>
+                  {% elif pct24 > 0 %}<span class="num-pct-pos">+{{ ('{:.2f}'.format(pct24)) }}%</span>
+                  {% elif pct24 < 0 %}<span class="num-pct-neg">{{ ('{:.2f}'.format(pct24)) }}%</span>
+                  {% else %}<span>0.00%</span>{% endif %}
+                </td>
+
+                <td>
+                  {% if projected is none %}<span class="gain-null">—</span>
+                  {% else %}<span class="num-projected mono">{{ "{:,}".format(projected) }}</span>{% endif %}
+                </td>
+
+                <td>
+                  {% if comp_diff is none %}<span class="gain-null">—</span>
+                  {% elif comp_diff >= 0 %}<span class="gain-pos">+{{ "{:,}".format(comp_diff) }}</span>
+                  {% else %}<span class="gain-neg">{{ "{:,}".format(comp_diff) }}</span>{% endif %}
+                </td>
+
+                <td class="mono">
+                  {% if likes is none %}<span class="gain-null">—</span>
+                  {% elif likes >= 0 %}<span class="num-likes">+{{ "{:,}".format(likes) }}</span>
+                  {% else %}<span class="gain-neg">{{ "{:,}".format(likes) }}</span>{% endif %}
+                </td>
+
+                <td>
+                  {% if engagement is none %}<span class="gain-null">—</span>
+                  {% else %}<span class="num-eng">{{ ('{:.3f}'.format(engagement)) }}%</span>{% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>

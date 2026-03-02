@@ -179,48 +179,39 @@
       <h2 class="videos-title">Videos</h2>
       <div class="videos-count"><span id="visibleVideoCount">{{ videos|length }}</span> / {{ videos|length }} visible</div>
     </div>
+  </div>
 
-    {% if videos|length == 0 %}
-      <div class="empty">No videos available yet — add one using the form above.</div>
-    {% else %}
-      <div class="grid" id="videoGrid">
-        {% for v in videos %}
-          <article class="video-card" data-video-id="{{ v.video_id }}" data-search="{{ (v.short_title ~ ' ' ~ v.video_id ~ ' ' ~ ('soft-deleted' if v.is_deleted else ('tracking' if v.is_tracking else 'paused'))) | lower }}">
-            <a class="no-decor" href="{{ url_for('video_detail', video_id=v.video_id) }}">
-              <div class="thumb-wrap">
-                <img class="thumb-img" src="{{ v.thumbnail }}" alt="thumbnail for {{ v.short_title }}">
-                {% if v.channel_total_cached is not none %}
-                  <span class="pill">Channel: {{ "{:,}".format(v.channel_total_cached) }}</span>
-                {% endif %}
-                {% if v.is_deleted %}
-                  <span class="pill pill-right">Removed from tracking</span>
-                {% endif %}
-              </div>
-              <div class="video-body">
-                <p class="video-title">{{ v.short_title }}</p>
-                <div class="meta">
-                  <div>{{ v.video_id }}</div>
-                  <div>
-                    {% if v.is_deleted %}
-                      <span class="status deleted">soft-deleted</span>
-                    {% elif v.is_tracking %}
-                      <span class="status active">tracking</span>
-                    {% else %}
-                      <span class="status paused">paused</span>
-                    {% endif %}
-                  </div>
-                  <div data-live-views>
-                    Views: {% if v.latest_views is none %}—{% else %}{{ "{:,}".format(v.latest_views) }}{% endif %}
-                  </div>
-                  <div data-live-updated>
-                    Updated: {% if v.latest_ts_ist %}{{ v.latest_ts_ist }}{% else %}—{% endif %}
-                  </div>
+  <h5 class="mb-2">Tracked videos</h5>
+
+  {% if videos|length == 0 %}
+    <p class="muted">No videos being tracked yet — add one using the form above.</p>
+  {% else %}
+    <div class="grid">
+      {% for v in videos %}
+        <div class="card-thumb" data-video-id="{{ v.video_id }}">
+          {% if v.channel_total_cached is not none %}
+            <div class="badge-channel">{{ "{:,}".format(v.channel_total_cached) }}</div>
+          {% endif %}
+          <a class="no-decor" href="{{ url_for('video_detail', video_id=v.video_id) }}">
+            <img class="thumb-img" src="{{ v.thumbnail }}" alt="thumbnail for {{ v.short_title }}">
+            <div style="padding:.6rem;">
+              <div class="card-title">{{ v.short_title }}</div>
+              <div class="d-flex justify-content-between align-items-center mt-1">
+                <div class="short-id">{{ v.video_id }}</div>
+                <div class="muted small">
+                  {% if v.is_tracking %}
+                    <span class="badge bg-success">tracking</span>
+                  {% else %}
+                    <span class="badge bg-secondary">paused</span>
+                  {% endif %}
                 </div>
               </div>
-            </a>
-            <div class="actions">
-              <a class="btn-ghost" href="{{ url_for('video_stats', video_id=v.video_id) }}">Stats</a>
-              <a class="btn-ghost" href="{{ url_for('video_detail', video_id=v.video_id) }}">Details</a>
+              <div class="muted small mt-1" data-live-views>
+                Views: {% if v.latest_views is none %}—{% else %}{{ "{:,}".format(v.latest_views) }}{% endif %}
+              </div>
+              <div class="muted small" data-live-updated>
+                Updated: {% if v.latest_ts_ist %}{{ v.latest_ts_ist }}{% else %}—{% endif %}
+              </div>
             </div>
           </article>
         {% endfor %}
@@ -235,40 +226,14 @@
 <script>
   (function(){
     const cards = new Map();
-    const cardList = Array.from(document.querySelectorAll('[data-video-id]'));
-    const searchInput = document.getElementById('homeSearchInput');
-    const visibleCountEl = document.getElementById('visibleVideoCount');
-
-    cardList.forEach((card) => {
+    document.querySelectorAll('[data-video-id]').forEach((card) => {
       const vid = card.getAttribute('data-video-id');
       if (vid) cards.set(vid, card);
     });
-
-    function refreshVisibleCount() {
-      if (!visibleCountEl) return;
-      const visibleCount = cardList.filter((card) => card.style.display !== 'none').length;
-      visibleCountEl.textContent = String(visibleCount);
-    }
-
-    function applySearch() {
-      if (!searchInput) return;
-      const q = (searchInput.value || '').trim().toLowerCase();
-      cardList.forEach((card) => {
-        const searchable = card.getAttribute('data-search') || '';
-        card.style.display = (!q || searchable.includes(q)) ? '' : 'none';
-      });
-      refreshVisibleCount();
-    }
-
-    if (searchInput) {
-      searchInput.addEventListener('input', applySearch);
-      applySearch();
-    }
-
     if (!cards.size) return;
 
     let controller = null;
-    const POLL_MS = 5000;
+    const POLL_MS = 5 * 1000;
 
     function updateCard(card, data) {
       const viewsEl = card.querySelector('[data-live-views]');

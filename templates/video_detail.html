@@ -215,9 +215,9 @@
               <span class="dot" aria-hidden="true"></span>
               <span>
                 <span id="liveTextPrefix">Updated just now •</span>
-                <span id="liveViews" class="num-views" data-live-views-text>{{ "{:,}".format(v.latest_views) }}</span> views
+                <span id="liveViews" class="num-views" data-live-views>{{ "{:,}".format(v.latest_views) }}</span> views
               </span>
-            </div>
+            </div>https://github.com/Pranav280204/yt-tracks-v2/pull/2/conflict?name=templates%252Fvideo_detail.html&ancestor_oid=422e8cb7594f7396dc91b1f73828d64a555c12e3&base_oid=fdb66d66e9ee4b312d91e47628b8dc0b739b9482&head_oid=edf84e97b2ddb2d027d81331fb5d38fed5e68761
             <div class="live-sub" id="liveSub">IST: {% if v.latest_ts_ist %}{{ v.latest_ts_ist }}{% else %}—{% endif %}</div>
           {% else %}
             <div class="small-note">No samples yet.</div>
@@ -251,7 +251,7 @@
       <div class="card p-3 mb-3">
         <div class="d-flex justify-content-between align-items-start">
           <div>
-            <div class="stat-large num-views" data-live-views-text>{{ "{:,}".format(v.latest_views or 0) }}</div>
+            <div class="stat-large num-views" data-live-views>{{ "{:,}".format(v.latest_views or 0) }}</div>
             <div class="stat-sub">Latest total views</div>
           </div>
           <div class="text-end">
@@ -355,9 +355,10 @@
       </form>
     </div>
 
-    <div class="d-flex align-items-center gap-2 mb-2">
-      <button id="refreshRowsBtn" class="btn btn-sm btn-outline-primary" type="button">Refresh rows</button>
-      <div class="small-note muted">Manually fetch the latest rows from the database.</div>
+    <div class="d-flex flex-wrap justify-content-end mb-2">
+      <button id="refreshDayBtn" class="btn btn-sm btn-outline-primary" type="button">
+        Refresh table
+      </button>
     </div>
 
     <!-- Date selector row -->
@@ -378,7 +379,11 @@
     <!-- Data tables (each day wrapped in .day-block) -->
     {% set daily = (v.daily if v is defined and v.daily is not none else {}) %}
     <div id="daysContainer">
-      {% include "_video_day_blocks.html" %}
+      {% for d, rows in v.daily.items() %}
+        {% set date = d %}
+        {% set day_rows = rows %}
+        {% include "_day_table.html" %}
+      {% endfor %}
     </div>
 
     <footer class="mt-4 mb-3 text-center muted">Stored in PostgreSQL • UTC in DB, shown in IST</footer>
@@ -393,22 +398,10 @@
     const nextBtn = document.getElementById('nextDayBtn');
     const showingDate = document.getElementById('showingDate');
     let dayBlocks = Array.from(document.querySelectorAll('.day-block'));
-    let dates = Array.from(dateSelect ? dateSelect.options : []).map(opt => opt.value);
-
-    function rebuildDateOptions(nextDates) {
-      if (!dateSelect) return;
-      dateSelect.innerHTML = '';
-      nextDates.forEach((date) => {
-        const opt = document.createElement('option');
-        opt.value = date;
-        opt.textContent = date;
-        dateSelect.appendChild(opt);
-      });
-    }
-
-    function rebuildDayBlocks() {
-      dayBlocks = Array.from(document.querySelectorAll('.day-block'));
-    }
+    const dates = Array.from(dateSelect ? dateSelect.options : []).map(opt => opt.value);
+    const refreshBtn = document.getElementById('refreshDayBtn');
+    const daysContainer = document.getElementById('daysContainer');
+    let dayRefreshInFlight = false;
 
     function showDate(date) {
       dayBlocks.forEach(b => b.classList.remove('active'));
@@ -471,57 +464,17 @@
     }
 
     const liveBadge = document.getElementById('liveBadge');
+    if (!liveBadge) return;
 
     const videoId = "{{ v.video_id }}";
-    let lastKnownIso = liveBadge ? (liveBadge.dataset.latestIso || null) : null;
-    let lastKnownViews = Number(liveBadge ? (liveBadge.dataset.views || ({{ v.latest_views or 0 }})) : ({{ v.latest_views or 0 }}));
+    let lastKnownIso = liveBadge.dataset.latestIso || null;
+    let lastKnownViews = Number(liveBadge.dataset.views || ({{ v.latest_views or 0 }}));
     let controller = null;
-    const POLL_MS = 1 * 1000;
+    const POLL_MS = 5 * 1000;
 
     const liveTextPrefix = document.getElementById('liveTextPrefix');
     const liveViewsEl = document.getElementById('liveViews');
     const liveSub = document.getElementById('liveSub');
-    const daysContainer = document.getElementById('daysContainer');
-    let lastRowRefreshIso = lastKnownIso;
-    let rowRefreshQueued = false;
-    let rowsRefreshInFlight = false;
-    const refreshRowsBtn = document.getElementById('refreshRowsBtn');
-
-    async function refreshTableRows({silent = false} = {}) {
-      if (!daysContainer || rowsRefreshInFlight) return;
-      rowsRefreshInFlight = true;
-      if (refreshRowsBtn && !silent) refreshRowsBtn.disabled = true;
-      try {
-        const res = await fetch(`/video/${encodeURIComponent(videoId)}/rows`, {
-          credentials: 'same-origin',
-          cache: 'no-store',
-          headers: { 'Accept': 'application/json' }
-        });
-        if (!res.ok) return;
-        const j = await res.json();
-        if (!j || !j.days_html) return;
-        const currentDate = dateSelect ? dateSelect.value : null;
-        daysContainer.innerHTML = j.days_html;
-        dates = Array.isArray(j.dates) ? j.dates : [];
-        rebuildDateOptions(dates);
-        rebuildDayBlocks();
-        const nextDate = (currentDate && dates.includes(currentDate)) ? currentDate : (dates[0] || null);
-        if (nextDate) showDate(nextDate);
-        if (j.latest_ts_iso) {
-          lastRowRefreshIso = j.latest_ts_iso;
-        }
-      } catch (err) {
-        console.error('row refresh error:', err);
-      } finally {
-        rowsRefreshInFlight = false;
-        rowRefreshQueued = false;
-        if (refreshRowsBtn && !silent) refreshRowsBtn.disabled = false;
-      }
-    }
-
-    if (refreshRowsBtn) {
-      refreshRowsBtn.addEventListener('click', () => refreshTableRows());
-    }
 
     function formatViews(value) {
       return Number.isFinite(value) ? value.toLocaleString() : '—';
@@ -538,10 +491,55 @@
 
     function updateViews(value) {
       lastKnownViews = value;
-      document.querySelectorAll('[data-live-views-text]').forEach((el) => {
+      document.querySelectorAll('[data-live-views]').forEach((el) => {
         const nextText = formatViews(value);
         if (el.textContent !== nextText) el.textContent = nextText;
       });
+    }
+
+    async function refreshCurrentDay(reason = 'auto') {
+      if (!dateSelect || !daysContainer) return;
+      if (dayRefreshInFlight) return;
+      const selectedDate = dateSelect.value;
+      if (!selectedDate) return;
+      dayRefreshInFlight = true;
+      if (refreshBtn) {
+        refreshBtn.disabled = true;
+        refreshBtn.textContent = reason === 'manual' ? 'Refreshing…' : 'Refreshing…';
+      }
+      try {
+        const res = await fetch(`/video/${encodeURIComponent(videoId)}/day_html?date=${encodeURIComponent(selectedDate)}`, {
+          credentials: 'same-origin',
+          cache: 'no-store',
+          headers: { 'Accept': 'text/html' }
+        });
+        if (!res.ok) return;
+        const html = await res.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const newBlock = doc.querySelector('.day-block');
+        if (!newBlock) return;
+        const existing = daysContainer.querySelector(`.day-block[data-date="${selectedDate}"]`);
+        if (existing) {
+          existing.replaceWith(newBlock);
+        } else {
+          daysContainer.prepend(newBlock);
+        }
+        dayBlocks = Array.from(document.querySelectorAll('.day-block'));
+        showDate(selectedDate);
+      } catch (err) {
+        console.error('day refresh error:', err);
+      } finally {
+        dayRefreshInFlight = false;
+        if (refreshBtn) {
+          refreshBtn.disabled = false;
+          refreshBtn.textContent = 'Refresh table';
+        }
+      }
+    }
+
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', () => refreshCurrentDay('manual'));
     }
 
     async function poll() {
@@ -560,28 +558,17 @@
         const j = await res.json();
         if (!j) return;
 
-        if (j.latest_ts_iso && j.latest_ts_iso !== lastKnownIso) {
+        const isoChanged = j.latest_ts_iso && j.latest_ts_iso !== lastKnownIso;
+        if (isoChanged) {
           lastKnownIso = j.latest_ts_iso;
-          if (liveBadge) {
-            liveBadge.dataset.latestIso = j.latest_ts_iso;
-          }
-          if (daysContainer && !rowRefreshQueued && lastRowRefreshIso !== j.latest_ts_iso) {
-            rowRefreshQueued = true;
-            lastRowRefreshIso = j.latest_ts_iso;
-            setTimeout(() => {
-              refreshTableRows({silent: true});
-            }, 250);
-          }
+          liveBadge.dataset.latestIso = j.latest_ts_iso;
         }
 
         if (j.latest_views != null) {
           const newViews = Number(j.latest_views);
           if (!Number.isNaN(newViews) && newViews !== lastKnownViews) {
-            if (liveBadge) {
-              liveBadge.dataset.views = String(newViews);
-            }
+            liveBadge.dataset.views = String(newViews);
             updateViews(newViews);
-            updateLiveCounter(newViews);
           }
         }
 
@@ -595,6 +582,10 @@
           if (thumb && thumb.src !== j.thumbnail_url) thumb.src = j.thumbnail_url;
           const preview = document.querySelector('.thumb-preview');
           if (preview && preview.src !== j.thumbnail_url) preview.src = j.thumbnail_url;
+        }
+
+        if (isoChanged) {
+          refreshCurrentDay('auto');
         }
       } catch (err) {
         if (err && err.name === 'AbortError') return;
