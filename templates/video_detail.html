@@ -68,16 +68,6 @@
     }
     .live-badge .dot { width:9px; height:9px; border-radius:50%; background:#28a745; }
     .live-sub { display:block; font-size:.85rem; color:var(--muted); margin-top:.12rem; }
-    .live-counter {
-      margin-top:.75rem;
-      padding:.75rem 1rem;
-      border-radius:.6rem;
-      border:1px solid var(--border);
-      background:linear-gradient(180deg,#f8fbff,#ffffff);
-    }
-    .live-counter-label { font-size:.9rem; color:var(--muted); }
-    .live-counter-value { font-size:2rem; font-weight:800; color:var(--primary); line-height:1.1; }
-    .live-counter-sub { font-size:.8rem; color:var(--muted); margin-top:.15rem; }
 
     .action-row { display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; margin-top:.8rem; }
     .action-row .btn { min-width:110px; flex:0 0 auto; }
@@ -214,12 +204,6 @@
       <a href="https://www.youtube.com/watch?v={{ v.video_id }}" target="_blank" rel="noopener noreferrer">
         <img class="video-thumb" src="{{ v.thumbnail }}" alt="thumbnail for {{ v.name }}">
       </a>
-
-      <div class="live-counter" id="liveViewCounter">
-        <div class="live-counter-label">Live views</div>
-        <div class="live-counter-value" id="liveViewValue">{{ "{:,}".format(v.latest_views or 0) }}</div>
-        <div class="live-counter-sub">Updates every {{ v.pooling_interval }}s</div>
-      </div>
 
       <div class="mt-2">
         <div class="video-title">{{ v.name }}</div>
@@ -498,9 +482,6 @@
     const liveViewsEl = document.getElementById('liveViews');
     const liveSub = document.getElementById('liveSub');
     const daysContainer = document.getElementById('daysContainer');
-    const liveCounterEl = document.getElementById('liveViewCounter');
-    const liveValueEl = document.getElementById('liveViewValue');
-    const LIVE_POLL_MS = Math.max(5, Number('{{ v.pooling_interval or 30 }}')) * 1000;
     let lastRowRefreshIso = lastKnownIso;
     let rowRefreshQueued = false;
     let rowsRefreshInFlight = false;
@@ -561,32 +542,6 @@
         const nextText = formatViews(value);
         if (el.textContent !== nextText) el.textContent = nextText;
       });
-    }
-
-    function updateLiveCounter(value) {
-      if (!liveCounterEl || !liveValueEl) return;
-      const nextText = formatViews(value);
-      if (liveValueEl.textContent !== nextText) liveValueEl.textContent = nextText;
-    }
-
-    async function pollLiveCounter() {
-      if (!liveCounterEl) return;
-      try {
-        const res = await fetch(`/video/${encodeURIComponent(videoId)}/live_views`, {
-          credentials: 'same-origin',
-          cache: 'no-store',
-          headers: { 'Accept': 'application/json' }
-        });
-        if (!res.ok) return;
-        const j = await res.json();
-        if (!j) return;
-        if (j.live_views != null) {
-          const newViews = Number(j.live_views);
-          if (!Number.isNaN(newViews)) updateLiveCounter(newViews);
-        }
-      } catch (err) {
-        console.error('live counter error:', err);
-      }
     }
 
     async function poll() {
@@ -656,10 +611,6 @@
     const pollInterval = setInterval(() => {
       if (document.visibilityState === 'visible') poll();
     }, POLL_MS);
-    const livePollInterval = setInterval(() => {
-      if (document.visibilityState === 'visible') pollLiveCounter();
-    }, LIVE_POLL_MS);
-    pollLiveCounter();
 
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') {
@@ -673,7 +624,6 @@
 
     window.addEventListener('beforeunload', () => {
       clearInterval(pollInterval);
-      clearInterval(livePollInterval);
       clearInterval(timeAgoInterval);
       if (controller) {
         try { controller.abort(); } catch (e) {}

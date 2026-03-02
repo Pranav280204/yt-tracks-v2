@@ -53,11 +53,6 @@ IST = ZoneInfo("Asia/Kolkata")
 # Env & cache TTL
 # -----------------------------
 API_KEY = os.getenv("YOUTUBE_API_KEY", "")
-API_KEYS_RAW = os.getenv("YOUTUBE_API_KEYS", "")
-YOUTUBE_API_KEYS = [k.strip() for k in API_KEYS_RAW.split(",") if k.strip()]
-if API_KEY and API_KEY not in YOUTUBE_API_KEYS:
-    YOUTUBE_API_KEYS.insert(0, API_KEY)
-POOLING_INTERVAL = int(os.getenv("POOLING_INTERVAL", "30"))
 POSTGRES_URL = os.getenv("DATABASE_URL")
 # Reference video id used for 5-min ratio comparison
 REF_COMPARE_VIDEO_ID = "YxWlaYCA8MU"
@@ -116,19 +111,6 @@ if API_KEY:
 # simple in-memory cache for channel totals (to avoid bursts)
 _channel_views_cache: Dict[str, Tuple[Optional[int], float]] = {}
 _channel_cache_lock = threading.Lock()
-_api_key_lock = threading.Lock()
-_api_key_index = 0
-
-
-def get_rotating_api_key() -> Optional[str]:
-    """Return the next YouTube API key in rotation (or None if none configured)."""
-    global _api_key_index
-    if not YOUTUBE_API_KEYS:
-        return None
-    with _api_key_lock:
-        key = YOUTUBE_API_KEYS[_api_key_index % len(YOUTUBE_API_KEYS)]
-        _api_key_index = (_api_key_index + 1) % len(YOUTUBE_API_KEYS)
-    return key
 
 def get_channel_total_cached(channel_id: str) -> Optional[int]:
     """Return channel viewCount using cached value if recent; otherwise fetch and update cache."""
@@ -1556,8 +1538,12 @@ def build_video_display(vid: str):
                  daily_views_gain, gain_24h_midpoint_ist, likes_val, comments_val) = tpl
                 time_part = ts_ist.split(" ")[1]
 
-                midpoint_diff_24h = None
-                if gain_24h_midpoint_ist is not None:
+                # --- change 24h vs prev day (tolerant match) ---
+                # prev_map uses same tuple shape; gain_24h is at index 5
+                prev_tpl = prev_map.get(time_part) or find_closest_tpl(prev_map, time_part, tolerance_seconds=10)
+                prev_gain24 = prev_tpl[5] if prev_tpl else None
+                pct24_calc = None
+                if prev_gain24 not in (None, 0):
                     try:
                         target_epoch = int((datetime.fromisoformat(ts_ist).replace(tzinfo=IST) - timedelta(days=1)).timestamp())
                         i_mid = bisect.bisect_left(midpoint_epochs, target_epoch)
@@ -2477,7 +2463,6 @@ def video_detail(video_id):
     info["thumbnail_changed"] = info.get("thumbnail_changed", False)
     info["thumbnail_changed_at"] = info.get("thumbnail_changed_at")
     info["thumbnail_prev_url"] = info.get("thumbnail_prev_url")
-    info["pooling_interval"] = POOLING_INTERVAL
 
     return render_template("video_detail.html", v=info)
     
@@ -2519,36 +2504,6 @@ def video_detail_json(video_id):
         "thumbnail_changed": bool(vrow.get("thumbnail_changed", False)),
         "thumbnail_url": thumbnail
     })
-
-
-@app.get("/video/<video_id>/live_views")
-@login_required
-def video_live_views(video_id):
-    api_key = get_rotating_api_key()
-    if not api_key:
-        return jsonify({"error": "api_key_missing"}), 503
-    try:
-        resp = requests.get(
-            "https://www.googleapis.com/youtube/v3/videos",
-            params={
-                "part": "statistics",
-                "id": video_id,
-                "key": api_key,
-                "fields": "items(statistics/viewCount)"
-            },
-            timeout=10
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        items = data.get("items", [])
-        if not items:
-            return jsonify({"video_id": video_id, "live_views": None})
-        view_count = items[0].get("statistics", {}).get("viewCount")
-        live_views = int(view_count) if view_count is not None else None
-        return jsonify({"video_id": video_id, "live_views": live_views})
-    except requests.RequestException as exc:
-        log.warning("Live view fetch failed for %s: %s", video_id, exc)
-        return jsonify({"error": "fetch_failed"}), 502
 
 
 @app.post("/video/<video_id>/refresh")
